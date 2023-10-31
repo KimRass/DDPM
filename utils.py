@@ -41,7 +41,7 @@ def image_to_grid(image, n_cols):
     return grid
 
 
-def show_forward(ddpm, dl, device):
+def show_forward_process(ddpm, dl, device):
     for batch in dl:
         image = batch[0]
         image = image.to(device)
@@ -56,6 +56,14 @@ def show_forward(ddpm, dl, device):
             )
             grid.show()
         break
+
+
+def gather(x, t):
+    return x[t].view(-1, 1, 1, 1)
+
+
+def get_random_noise(batch_size, n_channels, img_size, device):
+    return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
 
 
 # n_timesteps = 300

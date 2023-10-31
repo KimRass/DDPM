@@ -1,75 +1,76 @@
 # References:
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
+    # https://nn.labml.ai/diffusion/stable_diffusion/sampler/ddpm.html
 
 import torch
-import torch.nn as nn
 import numpy as np
 import einops
 import imageio
 
+from utils import get_random_noise, gather
 
-def generate_image(
-    ddpm, batch_size, frames_per_gif, gif_name, img_size, device, n_channels=1,
-):
-    # batch_size=16
+
+def generate_image(ddpm, batch_size, n_frames, gif_name, img_size, device, n_channels=1):
+    # batch_size=4
     # device=DEVICE
-    # frames_per_gif=100
-    # gif_name="/Users/jongbeomkim/Downloads/sampling.gif"
-    # c=1
+    # n_frames=100
+    # n_channels=1
+    # gif_name="/Users/jongbeomkim/Downloads/test.gif"
     # img_size = 28
-    frame_indices = np.linspace(0, ddpm.n_timesteps, frames_per_gif).astype(np.uint)
+    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint8")
     frames = list()
 
     ddpm = ddpm.to(device)
     ddpm.eval()
     with torch.no_grad():
         # Starting from random noise
-        x = torch.randn(batch_size, n_channels, img_size, img_size).to(device)
+        x = get_random_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
 
         for idx, t in enumerate(range(ddpm.n_timesteps - 1, -1, -1)):
             # Estimate noise to be removed.
             time_tensor = torch.full(
                 size=(batch_size, 1), fill_value=t, dtype=torch.long, device=device,
             )
-            eta_theta = ddpm.backward(x, time_tensor)
+            eps_theta = ddpm.backward(x, time_tensor)
 
-            beta_t = ddpm.betas[t]
-            alpha_t = ddpm.alphas[t]
-            alpha_bar_t = ddpm.alpha_bars[t]
+            beta_t = gather(ddpm.beta, t=t)
+            alpha_t = gather(ddpm.alpha, t=t)
+            alpha_bar_t = gather(ddpm.alpha_bar, t=t)
 
             # Partially denoise image.
-            # x = (1 / alpha_t.sqrt()) * (x - (1 - alpha_t) / (1 - alpha_bar_t).sqrt() * eta_theta)
-            x = (1 / (alpha_t ** 0.5)) * (x - beta_t / ((1 - alpha_bar_t) ** 0.5) * eta_theta)
-            # "$$\mu_{\theta}(x_{t}, t) = \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
+            # x = (1 / alpha_t.sqrt()) * (x - (1 - alpha_t) / (1 - alpha_bar_t).sqrt() * eps_theta)
+            x = (1 / (alpha_t ** 0.5)) * (x - beta_t / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+            # "$$\mu_{\theta}(x_{t}, t) =
+            # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
 
             if t > 0:
-                z = torch.randn(batch_size, n_channels, img_size, img_size).to(device)
-                sigma_t = beta_t.sqrt()
+                random_noise = get_random_noise(
+                    batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
+                )
+                sigma_t = beta_t ** 0.5
                 # Add some more noise like in Langevin Dynamics fashion.
-                x = x + sigma_t * z
+                x += sigma_t * random_noise
 
             # Add frames to GIF file.
             if idx in frame_indices or t == 0:
-                # Putting digits in range [0, 255]
-                normalized = x.clone()
-                for i in range(len(normalized)):
-                    normalized[i] -= normalized[i].min()
-                    normalized[i] *= (255 / normalized[i].max())
+                copied = x.clone()
+                copied -= copied.amin(dim=(1, 2, 3))[:, None, None, None]
+                copied /= copied.amax(dim=(1, 2, 3))[:, None, None, None]
+                copied *= 255 # $[0, 255]$
 
-                # Reshaping batch (n, c, h, w) to be a (as much as it gets) square frame
+                # Reshape batch (b, c, h, w) to be a (as much as it gets) square frame
                 frame = einops.rearrange(
-                    normalized, "(b1 b2) c h w -> (b1 h) (b2 w) c", b1=int(batch_size ** 0.5),
+                    copied, pattern="(b1 b2) c h w -> (b1 h) (b2 w) c", b1=int(batch_size ** 0.5),
                 )
                 frame = frame.cpu().numpy().astype("uint8")
 
-                # Rendering frame
                 frames.append(frame)
 
-    # Save
     with imageio.get_writer(gif_name, mode="I") as writer:
         for idx, frame in enumerate(frames):
             writer.append_data(frame)
+
             if idx == len(frames) - 1:
-                for _ in range(frames_per_gif // 3):
+                for _ in range(n_frames // 3):
                     writer.append_data(frames[-1])
     return x

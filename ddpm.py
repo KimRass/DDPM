@@ -9,7 +9,7 @@ from torchvision.datasets.mnist import MNIST
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from utils import load_config, get_device, image_to_grid, show_forward
+from utils import load_config, get_device, gather, image_to_grid, show_forward_process
 from data import get_mnist_dataset
 from model import UNetForDDPM
 from generate_images import generate_image
@@ -25,21 +25,28 @@ class DDPM(nn.Module):
 
         # "We set the forward process variances to constants increasing linearly from $\beta_{1} = 10^{-4}$
         # to $\beta_{T} = 0.02$.
-        self.betas = torch.linspace(init_beta, fin_beta, n_timesteps).to(device)
-        self.alphas = 1 - self.betas
-        self.alpha_bars = torch.tensor(
-            [torch.prod(self.alphas[:i + 1]) for i in range(len(self.alphas))]
-        ).to(device)
+        self.beta = torch.linspace(init_beta, fin_beta, n_timesteps, device=device) # "$\beta_{t}$"
+        self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
+        self.alpha_bar = self._get_alpha_bar(self.alpha) # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
 
-    def forward(self, x0, t, eta=None):
-        # Make input image more x. (We can directly skip to the desired step.)
-        b, c, h, w = x0.shape
-        a_bar = self.alpha_bars[t]
+    def _get_alpha_bar(self, alpha):
+        # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
+        return torch.cumprod(alpha, dim=0)
 
-        if eta is None:
-            eta = torch.randn(b, c, h, w).to(self.device)
+    def _q(self, x0, t): # $q(x_{t} \vert x_{0})$
+        alpha_bar_t = gather(self.alpha_bar, t=t) # "$\bar{\alpha_{t}}$"
+        mean = (alpha_bar_t ** 0.5) * x0 # $\sqrt{\bar{\alpha_{t}}}x_{0}$
+        var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+        return mean, var
 
-        x = (a_bar ** 0.5).reshape(b, 1, 1, 1) * x0 + ((1 - a_bar) ** 0.5).reshape(b, 1, 1, 1) * eta
+    def _sample_from_q(self, x0, t, eps):
+        if eps is None:
+            eps = torch.randn_like(x0) # $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+        mean, var = self._q(x0=x0, t=t)
+        return mean + (var ** 0.5) * eps
+
+    def forward(self, x0, t, eps=None):
+        x = self._sample_from_q(x0=x0, t=t, eps=eps)
         return x
 
     def backward(self, x, t):
@@ -69,13 +76,15 @@ ddpm = DDPM(
     n_timesteps=CONFIG["N_TIMESTEPS"],
     device=DEVICE,
 )
-show_forward(ddpm=ddpm, dl=dl, device=DEVICE)
+show_forward_process(ddpm=ddpm, dl=dl, device=DEVICE)
 
 generated = generate_image(
     ddpm=ddpm,
-    batch_size=16,
-    frames_per_gif=100,
+    batch_size=4,
+    n_frames=100,
     img_size=28,
     device=DEVICE,
     gif_name="/Users/jongbeomkim/Downloads/test.gif"
 )
+grid = image_to_grid(generated, n_cols=int(batch_size ** 0.5))
+grid.show()

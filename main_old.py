@@ -17,8 +17,6 @@ tot_n_steps = 100
 # self.tot_n_steps = tot_n_steps # $T$
 # self.eps_theta_model = eps_theta_model # $\epsilon_{\theta}(x_{t}, t)$
 beta = torch.linspace(0.0001, 0.02, tot_n_steps) # $\beta_{t}$
-alpha = 1 - beta # $\alpha_{t} = 1 - \beta_{t}$
-alpha_bar = torch.cumprod(alpha, dim=0) # $\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$
 sigma_square = beta
 
 
