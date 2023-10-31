@@ -1,3 +1,7 @@
+# "We assume that image data consists of integers in $\{0, 1, \ldots, 255\}$ scaled linearly
+# to $[-1, 1]$. This ensures that the neural network reverse process operates
+# on consistently scaled inputs starting from the standard normal prior $p(x_{T})$."
+
 import torch
 from torchvision.utils import make_grid
 import torchvision.transforms.functional as TF
@@ -37,6 +41,23 @@ def image_to_grid(image, n_cols):
     return grid
 
 
+def show_forward(ddpm, dl, device):
+    for batch in dl:
+        image = batch[0]
+        image = image.to(device)
+
+        grid = image_to_grid(image, n_cols=4)
+        grid.show()
+
+        for percent in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]:
+            grid = image_to_grid(
+                ddpm(image, t=[int(percent * ddpm.n_timesteps) - 1] * len(image)),
+                n_cols=4,
+            )
+            grid.show()
+        break
+
+
 # n_timesteps = 300
 # betas = linear_beta_schedule(n_timesteps)
 # alphas = 1 - betas # $\alpha_{t} = 1 - \beta_{t}$
@@ -52,9 +73,7 @@ def image_to_grid(image, n_cols):
 
 # image = Image.open("/Users/jongbeomkim/Documents/datasets/voc2012/VOCdevkit/VOC2012/JPEGImages/2007_001709.jpg")
 
-# # "We assume that image data consists of integers in $\{0, 1, \ldots, 255\}$ scaled linearly
-# # to $[-1, 1]$. This ensures that the neural network reverse process operates
-# # on consistently scaled inputs starting from the standard normal prior $p(x_{T})$."
+
 # IMG_SIZE = 128
 # transformer = T.Compose([
 #     T.Resize(IMG_SIZE),
