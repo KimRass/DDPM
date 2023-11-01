@@ -108,7 +108,7 @@ if __name__ == "__main__":
         accum_loss /= len(train_dl)
         accum_loss /= args.batch_size
         msg = f"[ {epoch}/{args.n_epochs} ]"
-        msg += f"[ Loss: {loss: .5f} ]"
+        msg += f"[ Loss: {loss:.4f} ]"
         print(msg)
     
     save_checkpoint(ddpm=ddpm, save_path=Path(__file__).resolve().parent/"checkpoints/ddpm.pth")
