@@ -72,7 +72,7 @@ if __name__ == "__main__":
     n_epochs = 20
     for epoch in range(1, n_epochs):
         accum_loss = 0
-        for x0, _ in tqdm(train_dl):
+        for x0, _ in train_dl:
             # break
             x0 = x0.to(DEVICE)
             # image_to_grid(x0, n_cols=4).show()
