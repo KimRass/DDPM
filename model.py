@@ -149,20 +149,20 @@ class UNetForDDPM(nn.Module):
         b, _, _, _ = x.shape
         t = self.time_embed(t)
 
-        x1 = self.b1(x + self.mlp_block1(t).reshape(b, -1, 1, 1))  # (N, 10, 28, 28)
-        x2 = self.b2(self.down1(x1) + self.mlp_block2(t).reshape(b, -1, 1, 1))  # (N, 20, 14, 14)
-        x3 = self.b3(self.down2(x2) + self.mlp_block3(t).reshape(b, -1, 1, 1))  # (N, 40, 7, 7)
+        x1 = self.b1(x + self.mlp_block1(t).view(b, -1, 1, 1))  # (N, 10, 28, 28)
+        x2 = self.b2(self.down1(x1) + self.mlp_block2(t).view(b, -1, 1, 1))  # (N, 20, 14, 14)
+        x3 = self.b3(self.down2(x2) + self.mlp_block3(t).view(b, -1, 1, 1))  # (N, 40, 7, 7)
 
-        x_mid = self.b_mid(self.down3(x3) + self.mid_mlp_block(t).reshape(b, -1, 1, 1))  # (N, 40, 3, 3)
+        x_mid = self.b_mid(self.down3(x3) + self.mid_mlp_block(t).view(b, -1, 1, 1))  # (N, 40, 3, 3)
 
         x4 = torch.cat((x3, self.up1(x_mid)), dim=1)  # (N, 80, 7, 7)
-        x4 = self.b4(x4 + self.mlp_block4(t).reshape(b, -1, 1, 1))  # (N, 20, 7, 7)
+        x4 = self.b4(x4 + self.mlp_block4(t).view(b, -1, 1, 1))  # (N, 20, 7, 7)
 
         x5 = torch.cat((x2, self.up2(x4)), dim=1)  # (N, 40, 14, 14)
-        x5 = self.b5(x5 + self.mlp_block5(t).reshape(b, -1, 1, 1))  # (N, 10, 14, 14)
+        x5 = self.b5(x5 + self.mlp_block5(t).view(b, -1, 1, 1))  # (N, 10, 14, 14)
 
         x = torch.cat((x1, self.up3(x5)), dim=1)  # (N, 20, 28, 28)
-        x = self.b_out(x + self.mlp_block6(t).reshape(b, -1, 1, 1))  # (N, 1, 28, 28)
+        x = self.b_out(x + self.mlp_block6(t).view(b, -1, 1, 1))  # (N, 1, 28, 28)
 
         x = self.conv_out(x)
         return x

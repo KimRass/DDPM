@@ -66,6 +66,14 @@ def get_random_noise(batch_size, n_channels, img_size, device):
     return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
 
 
+def get_random_noise_like(x):
+    return torch.randn_like(x, device=x.device)
+
+
+def sample_timestep(n_timesteps, batch_size, device):
+    return torch.randint(low=0, high=n_timesteps, size=(batch_size, 1), device=device)
+
+
 # n_timesteps = 300
 # betas = linear_beta_schedule(n_timesteps)
 # alphas = 1 - betas # $\alpha_{t} = 1 - \beta_{t}$
@@ -101,7 +109,7 @@ def get_random_noise(batch_size, n_channels, img_size, device):
 # def extract(a, t, shape):
 #     b = t.shape[0]
 #     out = torch.gather(a, dim=-1, index=t)
-#     out = out.reshape(b, *((1,) * (len(shape) - 1)))
+#     out = out.view(b, *((1,) * (len(shape) - 1)))
 #     return out
 
 

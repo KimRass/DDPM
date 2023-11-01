@@ -7,9 +7,9 @@ import torch.nn.functional as F
 
 
 def gather(consts: torch.Tensor, t: torch.Tensor):
-    """Gather consts for $t$ and reshape to feature map shape"""
+    """Gather consts for $t$ and view to feature map shape"""
     c = consts.gather(-1, t)
-    return c.reshape(-1, 1, 1, 1)
+    return c.view(-1, 1, 1, 1)
 
 
 # def __init__(tot_n_steps, eps_theta_model):
