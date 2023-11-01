@@ -7,7 +7,7 @@ import numpy as np
 import einops
 import imageio
 
-from utils import get_random_noise, gather
+from utils import get_noise, gather
 
 
 def generate_image(ddpm, batch_size, n_frames, gif_name, img_size, device, n_channels=1):
@@ -24,7 +24,7 @@ def generate_image(ddpm, batch_size, n_frames, gif_name, img_size, device, n_cha
     ddpm.eval()
     with torch.no_grad():
         # Starting from random noise
-        x = get_random_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+        x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
 
         for idx, t in enumerate(range(ddpm.n_timesteps - 1, -1, -1)):
             # Estimate noise to be removed.
@@ -44,7 +44,7 @@ def generate_image(ddpm, batch_size, n_frames, gif_name, img_size, device, n_cha
             # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
 
             if t > 0:
-                random_noise = get_random_noise(
+                random_noise = get_noise(
                     batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
                 )
                 sigma_t = beta_t ** 0.5
