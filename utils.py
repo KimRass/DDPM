@@ -62,11 +62,11 @@ def gather(x, t):
     return x[t].view(-1, 1, 1, 1)
 
 
-def get_random_noise(batch_size, n_channels, img_size, device):
+def get_noise(batch_size, n_channels, img_size, device):
     return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
 
 
-def get_random_noise_like(x):
+def get_noise_like(x):
     return torch.randn_like(x, device=x.device)
 
 

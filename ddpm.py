@@ -15,7 +15,7 @@ from utils import (
     gather,
     image_to_grid,
     show_forward_process,
-    get_random_noise_like,
+    get_noise_like,
 )
 from data import get_mnist_dataset
 from model import UNetForDDPM
@@ -40,7 +40,7 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         return torch.cumprod(alpha, dim=0)
 
-    def _q(self, x0, t): # $q(x_{t} \vert x_{0})$
+    def _q(self, t): # $q(x_{t} \vert x_{0})$
         alpha_bar_t = gather(self.alpha_bar, t=t) # "$\bar{\alpha_{t}}$"
         mean = (alpha_bar_t ** 0.5) # $\sqrt{\bar{\alpha_{t}}}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
@@ -48,8 +48,8 @@ class DDPM(nn.Module):
 
     def _sample_from_q(self, x0, t, eps):
         if eps is None:
-            eps = get_random_noise_like(x0) # $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
-        mean, var = self._q(x0=x0, t=t)
+            eps = get_noise_like(x0) # $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+        mean, var = self._q(t)
         return mean * x0 + (var ** 0.5) * eps
 
     def forward(self, x0, t, eps=None):
@@ -74,7 +74,6 @@ if __name__ == "__main__":
     image, _ = next(iter(dl))
     grid = image_to_grid(image, 4)
     grid.show()
-
 
     model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
     ddpm = DDPM(
