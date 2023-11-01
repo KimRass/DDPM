@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from torch.cuda.amp import GradScaler
 import argparse
-from tqdm import tqdm
 from pathlib import Path
 
 from utils import (
@@ -25,9 +25,9 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", type=str, required=True)
+    parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
-    # parser.add_argument("--run_id", type=str, required=False)
 
     args = parser.parse_args()
     return args
@@ -42,9 +42,9 @@ if __name__ == "__main__":
     # CONFIG = load_config("/Users/jongbeomkim/Desktop/workspace/DDPM/config.yaml")
     CONFIG = load_config(Path(__file__).parent/"config.yaml")
 
-    DEVICE = get_device()
-
     args = get_args()
+
+    DEVICE = get_device()
 
     model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
     ddpm = DDPM(
@@ -69,8 +69,9 @@ if __name__ == "__main__":
 
     optim = Adam(ddpm.parameters(), lr=0.0001)
 
-    n_epochs = 20
-    for epoch in range(1, n_epochs):
+    scaler = GradScaler() if DEVICE.type == "cuda" else None
+
+    for epoch in range(1, args.n_epochs):
         accum_loss = 0
         for x0, _ in train_dl:
             # break
@@ -82,23 +83,31 @@ if __name__ == "__main__":
             )
             eps = get_noise_like(x0)
 
-            noisy_image = ddpm(x0, t=t, eps=eps)
-            # image_to_grid(noisy_image, n_cols=4).show()
-
-            # Getting model estimation of noise based on the images and the time-step
-            pred_eps = ddpm.estimate_noise(noisy_image, t=t) # (b, 1, `img_size`, `img_size`)
-            # image_to_grid(pred_eps, n_cols=4).show()
-            loss = crit(pred_eps, eps)
+            with torch.autocast(
+                device_type=DEVICE.type,
+                dtype=torch.float16 if DEVICE.type == "cuda" else torch.bfloat16,
+                # enabled=True,
+            ):
+                noisy_image = ddpm(x0, t=t, eps=eps)
+                # image_to_grid(noisy_image, n_cols=4).show()
+                pred_eps = ddpm.estimate_noise(noisy_image, t=t) # (b, 1, `img_size`, `img_size`)
+                # image_to_grid(pred_eps, n_cols=4).show()
+                loss = crit(pred_eps, eps)
 
             optim.zero_grad()
-            loss.backward()
-            optim.step()
+            if DEVICE.type == "cuda" and scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.step(optim)
+                scaler.update()
+            else:
+                loss.backward()
+                optim.step()
 
             accum_loss += loss.item()
 
         accum_loss /= len(train_dl)
         accum_loss /= args.batch_size
-        msg = f"[ {epoch}/{n_epochs} ]"
+        msg = f"[ {epoch}/{args.n_epochs} ]"
         msg += f"[ Loss: {loss: .5f} ]"
         print(msg)
     

@@ -19,7 +19,6 @@ from utils import (
 )
 from data import get_mnist_dataset
 from model import UNetForDDPM
-from generate_images import generate_image
 
 
 class DDPM(nn.Module):
@@ -84,14 +83,3 @@ if __name__ == "__main__":
         device=DEVICE,
     )
     show_forward_process(ddpm=ddpm, dl=dl, device=DEVICE)
-
-    generated = generate_image(
-        ddpm=ddpm,
-        batch_size=4,
-        n_frames=100,
-        img_size=28,
-        device=DEVICE,
-        gif_name="/Users/jongbeomkim/Downloads/test.gif"
-    )
-    grid = image_to_grid(generated, n_cols=int(batch_size ** 0.5))
-    grid.show()
