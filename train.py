@@ -13,7 +13,7 @@ from utils import (
     load_config,
     get_device,
     image_to_grid,
-    get_noise_like,
+    get_noise,
     sample_timestep,
 )
 from data import get_mnist_dataset
@@ -73,15 +73,20 @@ if __name__ == "__main__":
 
     for epoch in range(1, args.n_epochs):
         accum_loss = 0
-        for x0, _ in train_dl:
+        for x0, _ in train_dl: # "$x_{0} \sim q(x_{0})$"
             # break
             x0 = x0.to(DEVICE)
             # image_to_grid(x0, n_cols=4).show()
 
             t = sample_timestep(
                 n_timesteps=CONFIG["N_TIMESTEPS"], batch_size=args.batch_size, device=DEVICE,
-            )
-            eps = get_noise_like(x0)
+            ) # "$t \sim Uniform({1, \ldots, T})$"
+            eps = get_noise(
+                batch_size=args.batch_size,
+                n_channels=CONFIG["N_CHANNELS"],
+                img_size=CONFIG["IMG_SIZE"],
+                device=DEVICE,
+            ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
 
             with torch.autocast(
                 device_type=DEVICE.type,

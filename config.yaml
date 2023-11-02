@@ -2,3 +2,4 @@ INIT_BETA: 0.0001 # "$\beta_{1} = 10^{-4}$"
 FIN_BETA: 0.02 # "$\beta_{T} = 0.02$"
 N_TIMESTEPS: 1000
 IMG_SIZE: 128
+N_CHANNELS: 1

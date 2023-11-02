@@ -39,7 +39,8 @@ def generate_image(ddpm, batch_size, n_frames, gif_path, img_size, device, n_cha
     ddpm = ddpm.to(device)
     ddpm.eval()
     with torch.no_grad():
-        # Starting from random noise
+        # Sample pure noise from a Gaussian distribution.
+        # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
         x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
 
         for idx, t in enumerate(range(ddpm.n_timesteps - 1, -1, -1)):
@@ -47,25 +48,22 @@ def generate_image(ddpm, batch_size, n_frames, gif_path, img_size, device, n_cha
             time_tensor = torch.full(
                 size=(batch_size, 1), fill_value=t, dtype=torch.long, device=device,
             )
-            eps_theta = ddpm.estimate_noise(x, t=time_tensor)
+            eps_theta = ddpm.estimate_noise(x, t=time_tensor) # "$z_{\theta}(x_{t}, t)$"
 
             beta_t = gather(ddpm.beta, t=t)
             alpha_t = gather(ddpm.alpha, t=t)
             alpha_bar_t = gather(ddpm.alpha_bar, t=t)
 
             # Partially denoise image.
-            # x = (1 / alpha_t.sqrt()) * (x - (1 - alpha_t) / (1 - alpha_bar_t).sqrt() * eps_theta)
-            x = (1 / (alpha_t ** 0.5)) * (x - beta_t / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+            x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
             # "$$\mu_{\theta}(x_{t}, t) =
             # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
 
             if t > 0:
                 random_noise = get_noise(
                     batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
-                )
-                sigma_t = beta_t ** 0.5
-                # Add some more noise like in Langevin Dynamics fashion.
-                x += sigma_t * random_noise
+                ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
+                x += (beta_t ** 0.5) * random_noise
 
             # Add frames to GIF file.
             if idx in frame_indices or t == 0:

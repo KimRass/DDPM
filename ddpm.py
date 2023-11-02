@@ -15,10 +15,14 @@ from utils import (
     gather,
     image_to_grid,
     show_forward_process,
-    get_noise_like,
+    get_noise,
 )
 from data import get_mnist_dataset
 from model import UNetForDDPM
+
+
+def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps, device):
+    return torch.linspace(init_beta, fin_beta, n_timesteps, device=device) # "$\beta_{t}$"
 
 
 class DDPM(nn.Module):
@@ -31,7 +35,9 @@ class DDPM(nn.Module):
 
         # "We set the forward process variances to constants increasing linearly from $\beta_{1} = 10^{-4}$
         # to $\beta_{T} = 0.02$.
-        self.beta = torch.linspace(init_beta, fin_beta, n_timesteps, device=device) # "$\beta_{t}$"
+        self.beta = _get_linear_beta_schdule(
+            init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps, device=device,
+        )
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
         self.alpha_bar = self._get_alpha_bar(self.alpha) # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
 
@@ -46,8 +52,14 @@ class DDPM(nn.Module):
         return mean, var
 
     def _sample_from_q(self, x0, t, eps):
+        b, c, h, _ = x0.shape
         if eps is None:
-            eps = get_noise_like(x0) # $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+            eps = get_noise(
+                batch_size=b,
+                n_channels=c,
+                img_size=h,
+                device=x0.device,
+            ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         mean, var = self._q(t)
         return mean * x0 + (var ** 0.5) * eps
 
@@ -60,26 +72,26 @@ class DDPM(nn.Module):
         return self.model(x, t)
 
 
-if __name__ == "__main__":
-    CONFIG = load_config("/Users/jongbeomkim/Desktop/workspace/DDPM/config.yaml")
-    # CONFIG = load_config(Path(__file__).parent/"config.yaml")
+# if __name__ == "__main__":
+#     CONFIG = load_config("/Users/jongbeomkim/Desktop/workspace/DDPM/config.yaml")
+#     # CONFIG = load_config(Path(__file__).parent/"config.yaml")
 
-    DEVICE = get_device()
+#     DEVICE = get_device()
 
-    batch_size = 16
-    ds = get_mnist_dataset("/Users/jongbeomkim/Documents/datasets")
-    dl = DataLoader(ds, batch_size, shuffle=True)
+#     batch_size = 16
+#     ds = get_mnist_dataset("/Users/jongbeomkim/Documents/datasets")
+#     dl = DataLoader(ds, batch_size, shuffle=True)
 
-    image, _ = next(iter(dl))
-    grid = image_to_grid(image, 4)
-    grid.show()
+#     image, _ = next(iter(dl))
+#     grid = image_to_grid(image, 4)
+#     grid.show()
 
-    model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
-    ddpm = DDPM(
-        model=model,
-        init_beta=CONFIG["INIT_BETA"],
-        fin_beta=CONFIG["FIN_BETA"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
-        device=DEVICE,
-    )
-    show_forward_process(ddpm=ddpm, dl=dl, device=DEVICE)
+#     model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
+#     ddpm = DDPM(
+#         model=model,
+#         init_beta=CONFIG["INIT_BETA"],
+#         fin_beta=CONFIG["FIN_BETA"],
+#         n_timesteps=CONFIG["N_TIMESTEPS"],
+#         device=DEVICE,
+#     )
+#     show_forward_process(ddpm=ddpm, dl=dl, device=DEVICE)

@@ -66,10 +66,6 @@ def get_noise(batch_size, n_channels, img_size, device):
     return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
 
 
-def get_noise_like(x):
-    return torch.randn_like(x, device=x.device)
-
-
 def sample_timestep(n_timesteps, batch_size, device):
     return torch.randint(low=0, high=n_timesteps, size=(batch_size, 1), device=device)
 
