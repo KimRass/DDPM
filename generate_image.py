@@ -26,7 +26,7 @@ def get_args():
     return args
 
 
-def generate_image(ddpm, batch_size, n_frames, gif_path, img_size, device, n_channels=1):
+def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, device):
     # batch_size=4
     # device=DEVICE
     # n_frames=100
@@ -97,7 +97,11 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
+    model = UNetForDDPM(
+        n_channels=CONFIG["N_CHANNELS"],
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        time_embed_dim=CONFIG["TIME_EMBED_DIM"],
+    )
     ddpm = DDPM(
         model=model,
         init_beta=CONFIG["INIT_BETA"],
@@ -109,11 +113,12 @@ if __name__ == "__main__":
     ddpm.load_state_dict(state_dict)
     generated = generate_image(
         ddpm=ddpm,
+        img_size=CONFIG["IMG_SIZE"],
+        n_channels=CONFIG["N_CHANNELS"],
         batch_size=args.batch_size,
         n_frames=100,
-        img_size=28,
-        device=DEVICE,
         gif_path=args.gif_path,
+        device=DEVICE,
     )
     grid = image_to_grid(generated, n_cols=int(args.batch_size ** 0.5))
     grid.show()

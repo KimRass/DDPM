@@ -79,7 +79,7 @@ if __name__ == "__main__":
     scaler = GradScaler() if DEVICE.type == "cuda" else None
 
     best_loss = math.inf
-    for epoch in range(1, args.n_epochs):
+    for epoch in range(1, args.n_epochs + 1):
         accum_loss = 0
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
@@ -90,12 +90,19 @@ if __name__ == "__main__":
             t = sample_timestep(
                 n_timesteps=CONFIG["N_TIMESTEPS"], batch_size=args.batch_size, device=DEVICE,
             ) # "$t \sim Uniform({1, \ldots, T})$"
+            # t = torch.randint(
+            #     low=CONFIG["N_TIMESTEPS"] - 1,
+            #     high=CONFIG["N_TIMESTEPS"],
+            #     size=(args.batch_size, 1),
+            #     device=DEVICE,
+            # )
             eps = get_noise(
                 batch_size=args.batch_size,
                 n_channels=CONFIG["N_CHANNELS"],
                 img_size=CONFIG["IMG_SIZE"],
                 device=DEVICE,
             ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
+            # image_to_grid(eps, n_cols=4).show()
 
             with torch.autocast(
                 device_type=DEVICE.type,
