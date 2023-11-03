@@ -54,18 +54,14 @@ class DDPM(nn.Module):
     def _sample_from_q(self, x0, t, eps):
         b, c, h, _ = x0.shape
         if eps is None:
-            eps = get_noise(
-                batch_size=b,
-                n_channels=c,
-                img_size=h,
-                device=x0.device,
-            ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
+            # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
+            eps = get_noise(batch_size=b, n_channels=c, img_size=h, device=x0.device)
         mean, var = self._q(t)
         return mean * x0 + (var ** 0.5) * eps
 
     def forward(self, x0, t, eps=None):
-        x = self._sample_from_q(x0=x0, t=t, eps=eps)
-        return x
+        noisy_image = self._sample_from_q(x0=x0, t=t, eps=eps)
+        return noisy_image
 
     def estimate_noise(self, x, t):
         # The model returns its estimation of the noise that was added.

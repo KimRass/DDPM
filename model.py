@@ -91,13 +91,14 @@ class UNetForDDPM(nn.Module):
         self.down1 = nn.Conv2d(10, 10, 4, 2, 1)
         self.down2 = nn.Conv2d(20, 20, 4, 2, 1)
         self.down3 = nn.Sequential(
-            nn.Conv2d(40, 40, 2, 1),
+            nn.Conv2d(40, 40, kernel_size=2, stride=1),
             nn.SiLU(),
-            nn.Conv2d(40, 40, 4, 2, 1),
+            nn.Conv2d(40, 40, kernel_size=4, stride=2, padding=1),
         )
 
         self.b1 = nn.Sequential(
-            ConvBlock(1, 10, shape=(1, 28, 28)),
+            # ConvBlock(1, 10, shape=(1, 28, 28)),
+            ConvBlock(3, 10, shape=(3, 28, 28)),
             ConvBlock(10, 10, shape=(10, 28, 28)),
             ConvBlock(10, 10, shape=(10, 28, 28)),
         )
@@ -121,12 +122,12 @@ class UNetForDDPM(nn.Module):
 
         # Second half
         self.up1 = nn.Sequential(
-            nn.ConvTranspose2d(40, 40, 4, 2, 1),
+            nn.ConvTranspose2d(40, 40, kernel_size=4, stride=2, padding=1),
             nn.SiLU(),
-            nn.ConvTranspose2d(40, 40, 2, 1),
+            nn.ConvTranspose2d(40, 40, kernel_size=2, stride=1),
         )
-        self.up2 = nn.ConvTranspose2d(20, 20, 4, 2, 1)
-        self.up3 = nn.ConvTranspose2d(10, 10, 4, 2, 1)
+        self.up2 = nn.ConvTranspose2d(20, 20, kernel_size=4, stride=2, padding=1)
+        self.up3 = nn.ConvTranspose2d(10, 10, kernel_size=4, stride=2, padding=1)
 
         self.b4 = nn.Sequential(
             ConvBlock(80, 40, shape=(80, 7, 7)),
@@ -144,7 +145,7 @@ class UNetForDDPM(nn.Module):
             ConvBlock(10, 10, shape=(10, 28, 28), normalize=False),
         )
 
-        self.conv_out = nn.Conv2d(10, 1, 3, 1, 1)
+        self.conv_out = nn.Conv2d(10, 1, kernel_size=3, stride=1, padding=1)
 
     # `x`: (b, 1, 28, 28), `t`: (b, 1)
     def forward(self, x, t):

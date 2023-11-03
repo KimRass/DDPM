@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import math
 from inspect import isfunction
 from functools import partial
-from einops import rearrange, reduce
+from einops import rearrange, reduce, einsum
 from einops.layers.torch import Rearrange
 
 
@@ -205,7 +205,7 @@ class PreNorm(nn.Module):
         return self.fn(x)
 
 
-class Unet(nn.Module):
+class UNetForDDPM(nn.Module):
     def __init__(
         self,
         dim,
@@ -224,7 +224,7 @@ class Unet(nn.Module):
         input_channels = channels * (2 if self_condition else 1)
 
         init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv2d(input_channels, init_dim, 1, padding=0) # changed to 1 and 0 from 7,3
+        self.init_conv = nn.Conv2d(input_channels, init_dim, kernel_size=1, padding=0) # changed to 1 and 0 from 7,3
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
@@ -242,8 +242,8 @@ class Unet(nn.Module):
         )
 
         # layers
-        self.downs = nn.ModuleList([])
-        self.ups = nn.ModuleList([])
+        self.downs = nn.ModuleList(list())
+        self.ups = nn.ModuleList(list())
         num_resolutions = len(in_out)
 
         for ind, (dim_in, dim_out) in enumerate(in_out):
@@ -294,37 +294,47 @@ class Unet(nn.Module):
             x = torch.cat((x_self_cond, x), dim=1)
 
         x = self.init_conv(x)
+        # print(x.shape)
         r = x.clone()
 
         t = self.time_mlp(time)
+        print(t.shape)
 
-        h = []
-
+        h = list()
         for block1, block2, attn, downsample in self.downs:
             x = block1(x, t)
             h.append(x)
 
-            x = block2(x, t)
-            x = attn(x)
-            h.append(x)
+            # x = block2(x, t)
+            # x = attn(x)
+            # h.append(x)
 
-            x = downsample(x)
+            # x = downsample(x)
 
-        x = self.mid_block1(x, t)
-        x = self.mid_attn(x)
-        x = self.mid_block2(x, t)
+        # x = self.mid_block1(x, t)
+        # x = self.mid_attn(x)
+        # x = self.mid_block2(x, t)
 
-        for block1, block2, attn, upsample in self.ups:
-            x = torch.cat((x, h.pop()), dim=1)
-            x = block1(x, t)
+        # for block1, block2, attn, upsample in self.ups:
+        #     x = torch.cat((x, h.pop()), dim=1)
+        #     x = block1(x, t)
 
-            x = torch.cat((x, h.pop()), dim=1)
-            x = block2(x, t)
-            x = attn(x)
+        #     x = torch.cat((x, h.pop()), dim=1)
+        #     x = block2(x, t)
+        #     x = attn(x)
 
-            x = upsample(x)
+        #     x = upsample(x)
 
-        x = torch.cat((x, r), dim=1)
+        # x = torch.cat((x, r), dim=1)
 
-        x = self.final_res_block(x, t)
-        return self.final_conv(x)
+        # x = self.final_res_block(x, t)
+        # return self.final_conv(x)
+
+
+if __name__ == "__main__":
+    img_size = 128
+    model = UNetForDDPM(dim=img_size, dim_mults=(1, 2, 4), channels=3)
+    x = torch.randn(4, 3, img_size, img_size)
+    t = torch.full(size=(4, 1), fill_value=30, dtype=torch.long)
+    out = model(x, time=t)
+    # out.shape

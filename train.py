@@ -39,7 +39,6 @@ def save_checkpoint(ddpm, save_path):
 
 
 if __name__ == "__main__":
-    # CONFIG = load_config("/Users/jongbeomkim/Desktop/workspace/DDPM/config.yaml")
     CONFIG = load_config(Path(__file__).parent/"config.yaml")
 
     args = get_args()
@@ -91,7 +90,6 @@ if __name__ == "__main__":
             with torch.autocast(
                 device_type=DEVICE.type,
                 dtype=torch.float16 if DEVICE.type == "cuda" else torch.bfloat16,
-                # enabled=True,
             ):
                 noisy_image = ddpm(x0, t=t, eps=eps)
                 # image_to_grid(noisy_image, n_cols=4).show()
