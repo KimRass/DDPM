@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as T
 from torch.utils.data import DataLoader
-from torchvision.datasets.mnist import MNIST
 import matplotlib.pyplot as plt
 from pathlib import Path
 

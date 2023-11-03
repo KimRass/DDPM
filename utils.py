@@ -5,11 +5,13 @@
 import torch
 from torchvision.utils import make_grid
 import torchvision.transforms.functional as TF
-import torch.nn.functional as F
-import torchvision.transforms as T
-from PIL import Image
-# import matplotlib.pyplot as plt
+from datetime import timedelta
+from time import time
 import yaml
+# import matplotlib.pyplot as plt
+# import torch.nn.functional as F
+# import torchvision.transforms as T
+# from PIL import Image
 
 
 def load_config(yaml_path):
@@ -24,6 +26,10 @@ def get_device():
     else:
         device = torch.device("cpu")
     return device
+
+
+def get_elapsed_time(start_time):
+    return timedelta(seconds=round(time() - start_time))
 
 
 def denorm(tensor):

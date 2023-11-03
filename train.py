@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader
 from torch.cuda.amp import GradScaler
 import argparse
 from pathlib import Path
+import math
+from time import time
 
 from utils import (
     load_config,
@@ -15,6 +17,7 @@ from utils import (
     image_to_grid,
     get_noise,
     sample_timestep,
+    get_elapsed_time,
 )
 from celeba import CelebADataset
 from model import UNetForDDPM
@@ -75,8 +78,10 @@ if __name__ == "__main__":
 
     scaler = GradScaler() if DEVICE.type == "cuda" else None
 
+    best_loss = math.inf
     for epoch in range(1, args.n_epochs):
         accum_loss = 0
+        start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
             # break
             x0 = x0.to(DEVICE)
@@ -115,8 +120,12 @@ if __name__ == "__main__":
 
         accum_loss /= len(train_dl)
         accum_loss /= args.batch_size
+
         msg = f"[ {epoch}/{args.n_epochs} ]"
+        msg += f"[ {get_elapsed_time(start_time)} ]"
         msg += f"[ Loss: {loss:.4f} ]"
         print(msg)
-    
-    save_checkpoint(ddpm=ddpm, save_path=Path(__file__).resolve().parent/"checkpoints/ddpm.pth")
+
+        if accum_loss < best_loss:
+            save_checkpoint(ddpm=ddpm, save_path=Path(__file__).resolve().parent/"checkpoints/ddpm.pth")
+            best_loss = accum_loss
