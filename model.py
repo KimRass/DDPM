@@ -73,7 +73,7 @@ class MLPBlock(nn.Module):
 class UNetForDDPM(nn.Module):
     # "The job of the network $\epsilon_{\theta}(x_{t}, t)$ is to take in a batch ofnoisy images and their respective noise levels, and output the noise added to the input."
     # "The network takes a batch of noisy images of shape (b, n, h, w) and a batch of noise levels of shape (b, 1) as input, and returns a tensor of shape (b, n, h, w)."
-    def __init__(self, n_timesteps, time_embed_dim=100):
+    def __init__(self, n_channels, n_timesteps, time_embed_dim=100):
         super().__init__()
 
         # Sinusoidal embedding
@@ -97,8 +97,7 @@ class UNetForDDPM(nn.Module):
         )
 
         self.b1 = nn.Sequential(
-            # ConvBlock(1, 10, shape=(1, 28, 28)),
-            ConvBlock(3, 10, shape=(3, 28, 28)),
+            ConvBlock(n_channels, 10, shape=(n_channels, 28, 28)),
             ConvBlock(10, 10, shape=(10, 28, 28)),
             ConvBlock(10, 10, shape=(10, 28, 28)),
         )
@@ -145,7 +144,7 @@ class UNetForDDPM(nn.Module):
             ConvBlock(10, 10, shape=(10, 28, 28), normalize=False),
         )
 
-        self.conv_out = nn.Conv2d(10, 1, kernel_size=3, stride=1, padding=1)
+        self.conv_out = nn.Conv2d(10, n_channels, kernel_size=3, stride=1, padding=1)
 
     # `x`: (b, 1, 28, 28), `t`: (b, 1)
     def forward(self, x, t):
@@ -172,8 +171,9 @@ class UNetForDDPM(nn.Module):
 
 
 if __name__ == "__main__":
-    model = UNetForDDPM(n_timesteps=200, time_embed_dim=100)
-    x = torch.randn(4, 1, 28, 28)
+    n_channels = 3
+    model = UNetForDDPM(n_channels=n_channels, n_timesteps=200, time_embed_dim=100)
+    x = torch.randn(4, n_channels, 28, 28)
     t = torch.full(size=(4, 1), fill_value=30, dtype=torch.long)
     out = model(x, t=t)
     out.shape

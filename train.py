@@ -16,7 +16,7 @@ from utils import (
     get_noise,
     sample_timestep,
 )
-from data import get_mnist_dataset
+from celeba import CelebADataset
 from model import UNetForDDPM
 from ddpm import DDPM
 
@@ -55,10 +55,11 @@ if __name__ == "__main__":
     )
     crit = nn.MSELoss()
 
-    # ds = get_mnist_dataset("/Users/jongbeomkim/Documents/datasets")
-    ds = get_mnist_dataset(args.data_dir)
+    train_ds = CelebADataset(
+        data_dir=args.data_dir, img_size=CONFIG["IMG_SIZE"], mean=CONFIG["MEAN"], std=CONFIG["STD"],
+    )
     train_dl = DataLoader(
-        ds,
+        train_ds,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.n_cpus,
