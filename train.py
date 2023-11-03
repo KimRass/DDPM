@@ -50,14 +50,14 @@ if __name__ == "__main__":
 
     model = UNetForDDPM(
         n_channels=CONFIG["N_CHANNELS"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
+        n_timesteps=args.n_timesteps,
         time_embed_dim=CONFIG["TIME_EMBED_DIM"],
     )
     ddpm = DDPM(
         model=model,
         init_beta=CONFIG["INIT_BETA"],
         fin_beta=CONFIG["FIN_BETA"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
+        n_timesteps=args.n_timesteps,
         device=DEVICE,
     )
     crit = nn.MSELoss()
@@ -88,11 +88,11 @@ if __name__ == "__main__":
             # image_to_grid(x0, n_cols=4).show()
 
             t = sample_timestep(
-                n_timesteps=CONFIG["N_TIMESTEPS"], batch_size=args.batch_size, device=DEVICE,
+                n_timesteps=args.n_timesteps, batch_size=args.batch_size, device=DEVICE,
             ) # "$t \sim Uniform({1, \ldots, T})$"
             # t = torch.randint(
-            #     low=CONFIG["N_TIMESTEPS"] - 1,
-            #     high=CONFIG["N_TIMESTEPS"],
+            #     low=args.n_timesteps - 1,
+            #     high=args.n_timesteps,
             #     size=(args.batch_size, 1),
             #     device=DEVICE,
             # )
