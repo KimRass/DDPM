@@ -74,7 +74,7 @@ if __name__ == "__main__":
         drop_last=True,
     )
 
-    optim = Adam(ddpm.parameters(), lr=0.0001)
+    optim = Adam(ddpm.parameters(), lr=CONFIG["LR"])
 
     scaler = GradScaler() if DEVICE.type == "cuda" else None
 

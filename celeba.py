@@ -17,6 +17,7 @@ class CelebADataset(Dataset):
         self.transformer = T.Compose([
             T.Resize(img_size),
             T.CenterCrop(img_size),
+            # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
             T.RandomHorizontalFlip(0.5),
             T.ToTensor(),
             # "No pre-processing was applied to training images besides scaling to the range of the tanh
