@@ -133,7 +133,7 @@ if __name__ == "__main__":
         msg += f"[ {get_elapsed_time(start_time)} ]"
         msg += f"[ Loss: {loss:.4f} ]"
 
-        if accum_loss < best_loss and epoch >= 50:
+        if accum_loss < best_loss:
             save_checkpoint(
                 ddpm=ddpm, save_path=Path(__file__).resolve().parent/f"checkpoints/ddpm_{epoch}.pth",
             )
