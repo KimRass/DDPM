@@ -19,7 +19,6 @@ def get_args():
 
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
-    parser.add_argument("--n_timesteps", type=int, required=True)
     parser.add_argument("--gif_path", type=str, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
