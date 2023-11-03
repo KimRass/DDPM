@@ -45,7 +45,11 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
+    model = UNetForDDPM(
+        n_channels=CONFIG["N_CHANNELS"],
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        time_embed_dim=CONFIG["TIME_EMBED_DIM"],
+    )
     ddpm = DDPM(
         model=model,
         init_beta=CONFIG["INIT_BETA"],
@@ -73,7 +77,7 @@ if __name__ == "__main__":
 
     for epoch in range(1, args.n_epochs):
         accum_loss = 0
-        for x0, _ in train_dl: # "$x_{0} \sim q(x_{0})$"
+        for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
             # break
             x0 = x0.to(DEVICE)
             # image_to_grid(x0, n_cols=4).show()

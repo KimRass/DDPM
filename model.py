@@ -73,7 +73,7 @@ class MLPBlock(nn.Module):
 class UNetForDDPM(nn.Module):
     # "The job of the network $\epsilon_{\theta}(x_{t}, t)$ is to take in a batch ofnoisy images and their respective noise levels, and output the noise added to the input."
     # "The network takes a batch of noisy images of shape (b, n, h, w) and a batch of noise levels of shape (b, 1) as input, and returns a tensor of shape (b, n, h, w)."
-    def __init__(self, n_channels, n_timesteps, time_embed_dim=100):
+    def __init__(self, n_channels, n_timesteps, time_embed_dim):
         super().__init__()
 
         # Sinusoidal embedding

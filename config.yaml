@@ -1,6 +1,7 @@
 INIT_BETA: 0.0001 # "$\beta_{1} = 10^{-4}$"
 FIN_BETA: 0.02 # "$\beta_{T} = 0.02$"
 N_TIMESTEPS: 1000
+TIME_EMBED_DIM: 100
 IMG_SIZE: 28
 N_CHANNELS: 3
 MEAN: [0.5, 0.5, 0.5]

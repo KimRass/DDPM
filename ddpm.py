@@ -17,7 +17,6 @@ from utils import (
     show_forward_process,
     get_noise,
 )
-from data import get_mnist_dataset
 from model import UNetForDDPM
 
 
@@ -57,10 +56,6 @@ class DDPM(nn.Module):
             # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
             eps = get_noise(batch_size=b, n_channels=c, img_size=h, device=x0.device)
         mean, var = self._q(t)
-        print(mean.shape)
-        print(var.shape)
-        print(x0.shape)
-        print(eps.shape)
         return mean * x0 + (var ** 0.5) * eps
 
     def forward(self, x0, t, eps=None):
