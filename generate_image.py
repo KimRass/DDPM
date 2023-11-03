@@ -19,11 +19,20 @@ def get_args():
 
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--n_timesteps", type=int, required=True)
     parser.add_argument("--gif_path", type=str, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
     return args
+
+
+def _denorm(x):
+    copied = x.clone()
+    copied -= copied.amin(dim=(1, 2, 3))[:, None, None, None]
+    copied /= copied.amax(dim=(1, 2, 3))[:, None, None, None]
+    copied *= 255 # $[0, 255]$
+    return copied
 
 
 def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, device):
@@ -67,14 +76,9 @@ def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, d
 
             # Add frames to GIF file.
             if idx in frame_indices or t == 0:
-                copied = x.clone()
-                copied -= copied.amin(dim=(1, 2, 3))[:, None, None, None]
-                copied /= copied.amax(dim=(1, 2, 3))[:, None, None, None]
-                copied *= 255 # $[0, 255]$
-
-                # Reshape batch (b, c, h, w) to be a (as much as it gets) square frame
+                x = _denorm(x)
                 frame = einops.rearrange(
-                    copied, pattern="(b1 b2) c h w -> (b1 h) (b2 w) c", b1=int(batch_size ** 0.5),
+                    x, pattern="(b1 b2) c h w -> (b1 h) (b2 w) c", b1=int(batch_size ** 0.5),
                 )
                 frame = frame.cpu().numpy().astype("uint8")
 
@@ -99,14 +103,14 @@ if __name__ == "__main__":
 
     model = UNetForDDPM(
         n_channels=CONFIG["N_CHANNELS"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
+        n_timesteps=args.n_timesteps,
         time_embed_dim=CONFIG["TIME_EMBED_DIM"],
     )
     ddpm = DDPM(
         model=model,
         init_beta=CONFIG["INIT_BETA"],
         fin_beta=CONFIG["FIN_BETA"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
+        n_timesteps=args.n_timesteps,
         device=DEVICE,
     ).to(DEVICE)
     state_dict = torch.load(args.ckpt_path, map_location=DEVICE)
