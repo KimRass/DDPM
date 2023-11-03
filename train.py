@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
         msg = f"[ {epoch}/{args.n_epochs} ]"
         msg += f"[ {get_elapsed_time(start_time)} ]"
-        msg += f"[ Loss: {accum_loss:.4f} ]"
+        msg += f"[ Loss: {accum_loss:.7f} ]"
 
         if accum_loss < best_loss:
             save_checkpoint(
