@@ -74,16 +74,16 @@ def sample_timestep(n_timesteps, batch_size, device):
     return torch.randint(low=0, high=n_timesteps, size=(batch_size, 1), device=device)
 
 
-def get_ddpm_from_checkpoint(ckpt_path, device):
-    state_dict = torch.load(ckpt_path, map_location=device)
-    ddpm = DDPMForCelebA(
-        n_timesteps=state_dict["n_timesteps"],
-        time_dim=state_dict["time_dimension"],
-        init_beta=state_dict["initial_beta"],
-        fin_beta=state_dict["final_beta"],
-    ).to(device)
-    ddpm.load_state_dict(state_dict["model"])
-    return ddpm
+# def get_ddpm_from_checkpoint(ckpt_path, device):
+#     state_dict = torch.load(ckpt_path, map_location=device)
+#     ddpm = DDPMForCelebA(
+#         n_timesteps=state_dict["n_timesteps"],
+#         time_dim=state_dict["time_dimension"],
+#         init_beta=state_dict["initial_beta"],
+#         fin_beta=state_dict["final_beta"],
+#     ).to(device)
+#     ddpm.load_state_dict(state_dict["model"])
+#     return ddpm
 
 
 # n_timesteps = 300

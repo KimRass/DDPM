@@ -9,7 +9,9 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 
-from utils import load_config, get_device, get_noise, gather, image_to_grid, get_ddpm_from_checkpoint
+# from utils import load_config, get_device, get_noise, gather, image_to_grid, get_ddpm_from_checkpoint
+from utils import load_config, get_device, get_noise, gather, image_to_grid
+from model import UNetForDDPM
 
 
 def get_args():
@@ -73,6 +75,18 @@ def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, d
                 for _ in range(ddpm.n_timesteps // 3):
                     writer.append_data(frame)
     return x
+
+
+def get_ddpm_from_checkpoint(ckpt_path, device):
+    state_dict = torch.load(ckpt_path, map_location=device)
+    ddpm = DDPMForCelebA(
+        n_timesteps=state_dict["n_timesteps"],
+        time_dim=state_dict["time_dimension"],
+        init_beta=state_dict["initial_beta"],
+        fin_beta=state_dict["final_beta"],
+    ).to(device)
+    ddpm.load_state_dict(state_dict["model"])
+    return ddpm
 
 
 if __name__ == "__main__":
