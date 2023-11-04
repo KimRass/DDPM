@@ -9,9 +9,8 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 
-# from utils import load_config, get_device, get_noise, gather, image_to_grid, get_ddpm_from_checkpoint
 from utils import load_config, get_device, get_noise, gather, image_to_grid
-from model import UNetForDDPM
+from ddpm import DDPMForCelebA
 
 
 def get_args():

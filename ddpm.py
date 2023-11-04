@@ -40,7 +40,7 @@ class DDPMForCelebA(nn.Module):
         return torch.cumprod(alpha, dim=0)
 
     def _q(self, t): # $q(x_{t} \vert x_{0})$
-        alpha_bar_t = gather(self.alpha_bar, t=t) # "$\bar{\alpha_{t}}$"
+        alpha_bar_t = gather(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
         mean = (alpha_bar_t ** 0.5) # $\sqrt{\bar{\alpha_{t}}}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         return mean, var
