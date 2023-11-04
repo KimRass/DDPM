@@ -3,38 +3,34 @@
 
 import torch
 import torch.nn as nn
-import torchvision.transforms as T
-from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-from pathlib import Path
 
-from utils import (
-    load_config,
-    get_device,
-    gather,
-    image_to_grid,
-    show_forward_process,
-    get_noise,
-)
+from utils import gather, get_noise
 from model import UNetForDDPM
 
 
-def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps, device):
-    return torch.linspace(init_beta, fin_beta, n_timesteps, device=device) # "$\beta_{t}$"
+def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
+    return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
 
 
-class DDPM(nn.Module):
-    def __init__(self, model, init_beta, fin_beta, n_timesteps, device):
+class DDPMForCelebA(nn.Module):
+    def __init__(self, n_timesteps, time_dim, init_beta, fin_beta):
         super().__init__()
 
-        self.model = model.to(device)
         self.n_timesteps = n_timesteps
-        self.device = device
+        self.time_dim = time_dim
+        self.init_beta = init_beta
+        self.fin_beta = fin_beta
+
+        self.model = UNetForDDPM(
+            n_channels=3,
+            n_timesteps=n_timesteps,
+            time_dim=time_dim,
+        )
 
         # "We set the forward process variances to constants increasing linearly from $\beta_{1} = 10^{-4}$
         # to $\beta_{T} = 0.02$.
         self.beta = _get_linear_beta_schdule(
-            init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps, device=device,
+            init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps,
         )
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
         self.alpha_bar = self._get_alpha_bar(self.alpha) # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
@@ -64,28 +60,3 @@ class DDPM(nn.Module):
     def estimate_noise(self, x, t):
         # The model returns its estimation of the noise that was added.
         return self.model(x, t)
-
-
-# if __name__ == "__main__":
-#     CONFIG = load_config("/Users/jongbeomkim/Desktop/workspace/DDPM/config.yaml")
-#     # CONFIG = load_config(Path(__file__).parent/"config.yaml")
-
-#     DEVICE = get_device()
-
-#     batch_size = 16
-#     ds = get_mnist_dataset("/Users/jongbeomkim/Documents/datasets")
-#     dl = DataLoader(ds, batch_size, shuffle=True)
-
-#     image, _ = next(iter(dl))
-#     grid = image_to_grid(image, 4)
-#     grid.show()
-
-#     model = UNetForDDPM(n_timesteps=CONFIG["N_TIMESTEPS"])
-#     ddpm = DDPM(
-#         model=model,
-#         init_beta=CONFIG["INIT_BETA"],
-#         fin_beta=CONFIG["FIN_BETA"],
-#         n_timesteps=CONFIG["N_TIMESTEPS"],
-#         device=DEVICE,
-#     )
-#     show_forward_process(ddpm=ddpm, dl=dl, device=DEVICE)

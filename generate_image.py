@@ -4,14 +4,12 @@
 
 import torch
 import numpy as np
-import einops
 import imageio
 from pathlib import Path
 import argparse
+from tqdm import tqdm
 
-from utils import load_config, get_device, get_noise, gather, image_to_grid
-from model import UNetForDDPM
-from ddpm import DDPM
+from utils import load_config, get_device, get_noise, gather, image_to_grid, get_ddpm_from_checkpoint
 
 
 def get_args():
@@ -27,14 +25,7 @@ def get_args():
     return args
 
 
-def _denorm(x):
-    copied = x.clone()
-    copied -= copied.amin(dim=(1, 2, 3))[:, None, None, None]
-    copied /= copied.amax(dim=(1, 2, 3))[:, None, None, None]
-    copied *= 255 # $[0, 255]$
-    return copied
-
-
+@torch.no_grad()
 def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, device):
     # batch_size=4
     # device=DEVICE
@@ -43,54 +34,44 @@ def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, d
     # gif_path="/Users/jongbeomkim/Downloads/test.gif"
     # img_size = 28
     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint8")
-    frames = list()
 
     ddpm = ddpm.to(device)
     ddpm.eval()
-    with torch.no_grad():
+    with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
         x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-
-        for idx, t in enumerate(range(ddpm.n_timesteps - 1, -1, -1)):
+        for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
             # Estimate noise to be removed.
-            time_tensor = torch.full(
+            batched_t = torch.full(
                 size=(batch_size, 1), fill_value=t, dtype=torch.long, device=device,
             )
-            eps_theta = ddpm.estimate_noise(x, t=time_tensor) # "$z_{\theta}(x_{t}, t)$"
+            eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
 
             beta_t = gather(ddpm.beta, t=t)
             alpha_t = gather(ddpm.alpha, t=t)
             alpha_bar_t = gather(ddpm.alpha_bar, t=t)
 
             # Partially denoise image.
-            x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
             # "$$\mu_{\theta}(x_{t}, t) =
             # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
+            x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
 
             if t > 0:
-                random_noise = get_noise(
+                eps = get_noise(
                     batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
                 ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-                x += (beta_t ** 0.5) * random_noise
+                x += (beta_t ** 0.5) * eps
 
-            # Add frames to GIF file.
             if idx in frame_indices or t == 0:
-                x = _denorm(x)
-                frame = einops.rearrange(
-                    x, pattern="(b1 b2) c h w -> (b1 h) (b2 w) c", b1=int(batch_size ** 0.5),
-                )
-                frame = frame.cpu().numpy().astype("uint8")
+                grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
+                frame = np.array(grid)
+                writer.append_data(frame)
 
-                frames.append(frame)
-
-    with imageio.get_writer(gif_path, mode="I") as writer:
-        for idx, frame in enumerate(frames):
-            writer.append_data(frame)
-
-            if idx == len(frames) - 1:
-                for _ in range(n_frames // 3):
-                    writer.append_data(frames[-1])
+            # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
+            if idx == ddpm.n_timesteps - 1:
+                for _ in range(ddpm.n_timesteps // 3):
+                    writer.append_data(frame)
     return x
 
 
@@ -101,20 +82,7 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = UNetForDDPM(
-        n_channels=CONFIG["N_CHANNELS"],
-        n_timesteps=args.n_timesteps,
-        time_embed_dim=CONFIG["TIME_EMBED_DIM"],
-    )
-    ddpm = DDPM(
-        model=model,
-        init_beta=CONFIG["INIT_BETA"],
-        fin_beta=CONFIG["FIN_BETA"],
-        n_timesteps=args.n_timesteps,
-        device=DEVICE,
-    ).to(DEVICE)
-    state_dict = torch.load(args.ckpt_path, map_location=DEVICE)
-    ddpm.load_state_dict(state_dict)
+    ddpm = get_ddpm_from_checkpoint(ckpt_path=args.ckpt_path, device=DEVICE)
     generated = generate_image(
         ddpm=ddpm,
         img_size=CONFIG["IMG_SIZE"],

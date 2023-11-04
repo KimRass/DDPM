@@ -20,8 +20,7 @@ from utils import (
     get_elapsed_time,
 )
 from celeba import CelebADataset
-from model import UNetForDDPM
-from ddpm import DDPM
+from ddpm import DDPMForCelebA
 
 
 def get_args():
@@ -39,7 +38,14 @@ def get_args():
 
 def save_checkpoint(ddpm, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(ddpm.state_dict(), str(save_path))
+    state_dict = {
+        "n_timesteps": ddpm.n_timesteps,
+        "time_dimension": ddpm.time_dim,
+        "initial_beta": ddpm.init_beta,
+        "final_beta": ddpm.fin_beta,
+        "model": ddpm.state_dict(),
+    }
+    torch.save(state_dict, str(save_path))
 
 
 if __name__ == "__main__":
@@ -49,18 +55,13 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = UNetForDDPM(
-        n_channels=CONFIG["N_CHANNELS"],
+    ddpm = DDPMForCelebA(
         n_timesteps=args.n_timesteps,
-        time_embed_dim=CONFIG["TIME_EMBED_DIM"],
-    )
-    ddpm = DDPM(
-        model=model,
+        time_dim=CONFIG["TIME_DIM"],
         init_beta=CONFIG["INIT_BETA"],
         fin_beta=CONFIG["FIN_BETA"],
-        n_timesteps=args.n_timesteps,
-        device=DEVICE,
-    )
+    ).to(DEVICE)
+
     crit = nn.MSELoss()
 
     train_ds = CelebADataset(
@@ -80,13 +81,14 @@ if __name__ == "__main__":
     scaler = GradScaler() if DEVICE.type == "cuda" else None
 
     best_loss = math.inf
+    n_cols = int(args.batch_size ** 0.5)
     for epoch in range(1, args.n_epochs + 1):
         accum_loss = 0
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
             # break
             x0 = x0.to(DEVICE)
-            # image_to_grid(x0, n_cols=4).show()
+            # image_to_grid(x0, n_cols=n_cols).show()
 
             t = sample_timestep(
                 n_timesteps=args.n_timesteps, batch_size=args.batch_size, device=DEVICE,
@@ -103,16 +105,15 @@ if __name__ == "__main__":
                 img_size=CONFIG["IMG_SIZE"],
                 device=DEVICE,
             ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-            # image_to_grid(eps, n_cols=4).show()
 
             with torch.autocast(
                 device_type=DEVICE.type,
                 dtype=torch.float16 if DEVICE.type == "cuda" else torch.bfloat16,
             ):
                 noisy_image = ddpm(x0, t=t, eps=eps)
-                # image_to_grid(noisy_image, n_cols=4).show()
+                # image_to_grid(noisy_image, n_cols=n_cols).show()
                 pred_eps = ddpm.estimate_noise(noisy_image, t=t) # (b, 1, `img_size`, `img_size`)
-                # image_to_grid(pred_eps, n_cols=4).show()
+                # image_to_grid(pred_eps, n_cols=n_cols).show()
                 loss = crit(pred_eps, eps)
 
             optim.zero_grad()
@@ -135,7 +136,7 @@ if __name__ == "__main__":
 
         if accum_loss < best_loss:
             save_checkpoint(
-                ddpm=ddpm, save_path=Path(__file__).resolve().parent/f"checkpoints/ddpm_{epoch}.pth",
+                ddpm=ddpm, save_path=Path(__file__).resolve().parent/f"checkpoints/ddpm_epoch_{epoch}.pth",
             )
             msg += f" (Saved checkpoint.)"
             best_loss = accum_loss
