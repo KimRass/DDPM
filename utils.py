@@ -9,7 +9,7 @@ from datetime import timedelta
 from time import time
 import yaml
 
-from ddpm import DDPMForCelebA
+# from ddpm import DDPMForCelebA
 
 
 def load_config(yaml_path):
