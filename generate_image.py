@@ -28,18 +28,20 @@ def get_args():
 
 
 @torch.no_grad()
-def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, gif_path=None):
-    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint8")
+# def generate_gif(ddpm, batch_size, n_channels, img_size, n_frames, gif_path, device):
+def generate_gif(ddpm, batch_size, n_channels, img_size, gif_path, device):
+    # frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint8")
+    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=ddpm.n_timesteps, dtype="uint8")
 
     ddpm.eval()
     with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-        x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device)
+        x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
         for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
             # Estimate noise to be removed.
             batched_t = torch.full(
-                size=(batch_size, 1), fill_value=t, dtype=torch.long, device=ddpm.device,
+                size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
             )
             eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
 
@@ -54,19 +56,19 @@ def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, gif_path=No
 
             if t > 0:
                 eps = get_noise(
-                    batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device,
+                    batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
                 ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
                 x += (beta_t ** 0.5) * eps
 
-            if (gif_path is not None) and (idx in frame_indices or t == 0):
+            if idx in frame_indices or t == 0:
                 grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
                 frame = np.array(grid)
                 writer.append_data(frame)
 
-        # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
-        if (gif_path is not None) and (idx == ddpm.n_timesteps - 1):
-            for _ in range(ddpm.n_timesteps // 3):
-                writer.append_data(frame)
+            # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
+            if idx == ddpm.n_timesteps - 1:
+                for _ in range(100):
+                    writer.append_data(frame)
     return x
 
 
@@ -77,13 +79,13 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    ddpm = get_ddpm_from_checkpoint(ckpt_path=args.ckpt_path, device=DEVICE)
-    generated = generate_image(
+    ddpm, _ = get_ddpm_from_checkpoint(ckpt_path=args.ckpt_path, device=DEVICE)
+    generated = generate_gif(
         ddpm=ddpm,
         img_size=CONFIG["IMG_SIZE"],
         n_channels=CONFIG["N_CHANNELS"],
         batch_size=args.batch_size,
-        n_frames=100,
+        # n_frames=100,
         gif_path=args.gif_path,
         device=DEVICE,
     )

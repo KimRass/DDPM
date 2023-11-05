@@ -34,6 +34,7 @@ def get_args():
     parser.add_argument("--resume_from", type=str, required=False)
     parser.add_argument("--n_timesteps", type=int, required=False, default=1000)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
+    parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()
     return args
@@ -56,7 +57,7 @@ def get_ddpm_from_checkpoint(ckpt_path, device):
     state_dict = torch.load(ckpt_path, map_location=device)
     ddpm = DDPM(
         n_timesteps=state_dict["n_timesteps"],
-        time_dim=state_dict["time_dimension"],
+        # time_dim=state_dict["time_dimension"],
         init_beta=state_dict["initial_beta"],
         fin_beta=state_dict["final_beta"],
     ).to(device)
@@ -113,7 +114,8 @@ if __name__ == "__main__":
             fin_beta=CONFIG["FIN_BETA"],
         ).to(DEVICE)
         init_epoch = 0
-    ddpm = torch.compile(ddpm)
+    if args.torch_compile:
+        ddpm = torch.compile(ddpm)
 
     crit = nn.MSELoss()
 
