@@ -44,7 +44,7 @@ def save_checkpoint(epoch, ddpm, save_path):
     state_dict = {
         "epoch": epoch,
         "n_timesteps": ddpm.n_timesteps,
-        "time_dimension": ddpm.time_dim,
+        # "time_dimension": ddpm.time_dim,
         "initial_beta": ddpm.init_beta,
         "final_beta": ddpm.fin_beta,
         "model": modify_state_dict(ddpm.state_dict()),
@@ -113,7 +113,7 @@ if __name__ == "__main__":
             fin_beta=CONFIG["FIN_BETA"],
         ).to(DEVICE)
         init_epoch = 0
-    # ddpm = torch.compile(ddpm)
+    ddpm = torch.compile(ddpm)
 
     crit = nn.MSELoss()
 
@@ -147,12 +147,6 @@ if __name__ == "__main__":
             t = sample_timestep(
                 n_timesteps=ddpm.n_timesteps, batch_size=args.batch_size, device=DEVICE,
             ) # "$t \sim Uniform({1, \ldots, T})$"
-            # t = torch.randint(
-            #     low=ddpm.n_timesteps - 1,
-            #     high=ddpm.n_timesteps,
-            #     size=(args.batch_size, 1),
-            #     device=DEVICE,
-            # )
             eps = get_noise(
                 batch_size=args.batch_size,
                 n_channels=CONFIG["N_CHANNELS"],
