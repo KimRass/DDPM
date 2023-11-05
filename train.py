@@ -110,11 +110,11 @@ if __name__ == "__main__":
             # image_to_grid(x0, n_cols=n_cols).show()
 
             t = sample_timestep(
-                n_timesteps=args.n_timesteps, batch_size=args.batch_size, device=DEVICE,
+                n_timesteps=ddpm.n_timesteps, batch_size=args.batch_size, device=DEVICE,
             ) # "$t \sim Uniform({1, \ldots, T})$"
             # t = torch.randint(
-            #     low=args.n_timesteps - 1,
-            #     high=args.n_timesteps,
+            #     low=ddpm.n_timesteps - 1,
+            #     high=ddpm.n_timesteps,
             #     size=(args.batch_size, 1),
             #     device=DEVICE,
             # )
