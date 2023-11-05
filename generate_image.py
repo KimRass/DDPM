@@ -18,7 +18,7 @@ def get_args():
 
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
-    parser.add_argument("--n_timesteps", type=int, required=True)
+    # parser.add_argument("--n_timesteps", type=int, required=True)
     parser.add_argument("--gif_path", type=str, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
@@ -76,16 +76,16 @@ def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, d
     return x
 
 
-def get_ddpm_from_checkpoint(ckpt_path, device):
-    state_dict = torch.load(ckpt_path, map_location=device)
-    ddpm = DDPMForCelebA(
-        n_timesteps=state_dict["n_timesteps"],
-        time_dim=state_dict["time_dimension"],
-        init_beta=state_dict["initial_beta"],
-        fin_beta=state_dict["final_beta"],
-    ).to(device)
-    ddpm.load_state_dict(state_dict["model"])
-    return ddpm
+# def get_ddpm_from_checkpoint(ckpt_path, device):
+#     state_dict = torch.load(ckpt_path, map_location=device)
+#     ddpm = DDPMForCelebA(
+#         n_timesteps=state_dict["n_timesteps"],
+#         time_dim=state_dict["time_dimension"],
+#         init_beta=state_dict["initial_beta"],
+#         fin_beta=state_dict["final_beta"],
+#     ).to(device)
+#     ddpm.load_state_dict(state_dict["model"])
+#     return ddpm
 
 
 if __name__ == "__main__":

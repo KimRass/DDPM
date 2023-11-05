@@ -28,17 +28,19 @@ def get_args():
 
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
-    parser.add_argument("--n_timesteps", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--resume_from", type=str, required=False)
+    parser.add_argument("--n_timesteps", type=int, required=False)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
     return args
 
 
-def save_checkpoint(ddpm, save_path):
+def save_checkpoint(epoch, ddpm, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
     state_dict = {
+        "epoch": epoch,
         "n_timesteps": ddpm.n_timesteps,
         "time_dimension": ddpm.time_dim,
         "initial_beta": ddpm.init_beta,
@@ -48,6 +50,18 @@ def save_checkpoint(ddpm, save_path):
     torch.save(state_dict, str(save_path))
 
 
+def get_ddpm_from_checkpoint(ckpt_path, device):
+    state_dict = torch.load(ckpt_path, map_location=device)
+    ddpm = DDPMForCelebA(
+        n_timesteps=state_dict["n_timesteps"],
+        time_dim=state_dict["time_dimension"],
+        init_beta=state_dict["initial_beta"],
+        fin_beta=state_dict["final_beta"],
+    ).to(device)
+    ddpm.load_state_dict(state_dict["model"])
+    return ddpm
+
+
 if __name__ == "__main__":
     CONFIG = load_config(Path(__file__).parent/"config.yaml")
 
@@ -55,12 +69,17 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    ddpm = DDPMForCelebA(
-        n_timesteps=args.n_timesteps,
-        time_dim=CONFIG["TIME_DIM"],
-        init_beta=CONFIG["INIT_BETA"],
-        fin_beta=CONFIG["FIN_BETA"],
-    ).to(DEVICE)
+    if args.resume_from is not None:
+        ddpm = get_ddpm_from_checkpoint(ckpt_path=args.resume_from, device=DEVICE)
+        init_epoch = 200
+    else:
+        ddpm = DDPMForCelebA(
+            n_timesteps=args.n_timesteps,
+            time_dim=CONFIG["TIME_DIM"],
+            init_beta=CONFIG["INIT_BETA"],
+            fin_beta=CONFIG["FIN_BETA"],
+        ).to(DEVICE)
+        init_epoch = 0
 
     crit = nn.MSELoss()
 
@@ -82,7 +101,7 @@ if __name__ == "__main__":
 
     best_loss = math.inf
     n_cols = int(args.batch_size ** 0.5)
-    for epoch in range(1, args.n_epochs + 1):
+    for epoch in range(init_epoch + 1, args.n_epochs + 1):
         accum_loss = 0
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
@@ -136,7 +155,9 @@ if __name__ == "__main__":
 
         if accum_loss < best_loss:
             save_checkpoint(
-                ddpm=ddpm, save_path=Path(__file__).resolve().parent/f"checkpoints/ddpm_epoch_{epoch}.pth",
+                epoch=epoch,
+                ddpm=ddpm,
+                save_path=Path(__file__).resolve().parent/f"checkpoints/ddpm_epoch_{epoch}.pth",
             )
             msg += f" (Saved checkpoint.)"
             best_loss = accum_loss
