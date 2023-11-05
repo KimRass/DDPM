@@ -9,8 +9,9 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 
-from utils import load_config, get_device, get_noise, gather, image_to_grid
-from ddpm import DDPMForCelebA
+from utils import load_config, get_device, get_noise, extract, image_to_grid
+from ddpm import DDPM
+from train import get_ddpm_from_checkpoint
 
 
 def get_args():
@@ -27,31 +28,24 @@ def get_args():
 
 
 @torch.no_grad()
-def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, device):
-    # batch_size=4
-    # device=DEVICE
-    # n_frames=100
-    # n_channels=1
-    # gif_path="/Users/jongbeomkim/Downloads/test.gif"
-    # img_size = 28
+def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, gif_path=None):
     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint8")
 
-    ddpm = ddpm.to(device)
     ddpm.eval()
     with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-        x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+        x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device)
         for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
             # Estimate noise to be removed.
             batched_t = torch.full(
-                size=(batch_size, 1), fill_value=t, dtype=torch.long, device=device,
+                size=(batch_size, 1), fill_value=t, dtype=torch.long, device=ddpm.device,
             )
             eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
 
-            beta_t = gather(ddpm.beta, t=t)
-            alpha_t = gather(ddpm.alpha, t=t)
-            alpha_bar_t = gather(ddpm.alpha_bar, t=t)
+            beta_t = extract(ddpm.beta, t=t)
+            alpha_t = extract(ddpm.alpha, t=t)
+            alpha_bar_t = extract(ddpm.alpha_bar, t=t)
 
             # Partially denoise image.
             # "$$\mu_{\theta}(x_{t}, t) =
@@ -60,32 +54,20 @@ def generate_image(ddpm, img_size, n_channels, batch_size, n_frames, gif_path, d
 
             if t > 0:
                 eps = get_noise(
-                    batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
+                    batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device,
                 ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
                 x += (beta_t ** 0.5) * eps
 
-            if idx in frame_indices or t == 0:
+            if (gif_path is not None) and (idx in frame_indices or t == 0):
                 grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
                 frame = np.array(grid)
                 writer.append_data(frame)
 
-            # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
-            if idx == ddpm.n_timesteps - 1:
-                for _ in range(ddpm.n_timesteps // 3):
-                    writer.append_data(frame)
+        # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
+        if (gif_path is not None) and (idx == ddpm.n_timesteps - 1):
+            for _ in range(ddpm.n_timesteps // 3):
+                writer.append_data(frame)
     return x
-
-
-# def get_ddpm_from_checkpoint(ckpt_path, device):
-#     state_dict = torch.load(ckpt_path, map_location=device)
-#     ddpm = DDPMForCelebA(
-#         n_timesteps=state_dict["n_timesteps"],
-#         time_dim=state_dict["time_dimension"],
-#         init_beta=state_dict["initial_beta"],
-#         fin_beta=state_dict["final_beta"],
-#     ).to(device)
-#     ddpm.load_state_dict(state_dict["model"])
-#     return ddpm
 
 
 if __name__ == "__main__":

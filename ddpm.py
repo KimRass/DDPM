@@ -4,28 +4,31 @@
 import torch
 import torch.nn as nn
 
-from utils import gather, get_noise
-from model import UNetForDDPM
+from utils import extract, get_noise
+# from model import UNet
+from model2 import UNet
 
 
 def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
     return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
 
 
-class DDPMForCelebA(nn.Module):
-    def __init__(self, n_timesteps, time_dim, init_beta, fin_beta):
+class DDPM(nn.Module):
+    # def __init__(self, n_timesteps, time_dim, init_beta, fin_beta):
+    def __init__(self, n_timesteps, init_beta, fin_beta):
         super().__init__()
 
         self.n_timesteps = n_timesteps
-        self.time_dim = time_dim
+        # self.time_dim = time_dim
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        self.model = UNetForDDPM(
-            n_channels=3,
-            n_timesteps=n_timesteps,
-            time_dim=time_dim,
-        )
+        # self.model = UNet(
+        #     n_channels=3,
+        #     n_timesteps=n_timesteps,
+        #     time_dim=time_dim,
+        # )
+        self.model = UNet(n_timesteps=n_timesteps)
 
         # "We set the forward process variances to constants increasing linearly from $\beta_{1} = 10^{-4}$
         # to $\beta_{T} = 0.02$.
@@ -40,7 +43,7 @@ class DDPMForCelebA(nn.Module):
         return torch.cumprod(alpha, dim=0)
 
     def _q(self, t): # $q(x_{t} \vert x_{0})$
-        alpha_bar_t = gather(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
+        alpha_bar_t = extract(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
         mean = (alpha_bar_t ** 0.5) # $\sqrt{\bar{\alpha_{t}}}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         return mean, var

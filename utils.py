@@ -8,6 +8,7 @@ import torchvision.transforms.functional as TF
 from datetime import timedelta
 from time import time
 import yaml
+from collections import OrderedDict
 
 
 def load_config(yaml_path):
@@ -60,7 +61,7 @@ def show_forward_process(ddpm, dl, device):
         break
 
 
-def gather(x, t):
+def extract(x, t):
     return x[t].view(-1, 1, 1, 1)
 
 
@@ -69,4 +70,16 @@ def get_noise(batch_size, n_channels, img_size, device):
 
 
 def sample_timestep(n_timesteps, batch_size, device):
-    return torch.randint(low=0, high=n_timesteps, size=(batch_size, 1), device=device)
+    # return torch.randint(low=0, high=n_timesteps, size=(batch_size, 1), device=device)
+    return torch.randint(low=0, high=n_timesteps, size=(batch_size,), device=device)
+
+
+def modify_state_dict(state_dict, keyword="_orig_mod."):
+    new_state_dict = OrderedDict()
+    for old_key in list(state_dict.keys()):
+        if old_key and old_key.startswith(keyword):
+            new_key = old_key[len(keyword):]
+        else:
+            new_key = old_key
+        new_state_dict[new_key] = state_dict[old_key]
+    return new_state_dict

@@ -70,7 +70,7 @@ class MLPBlock(nn.Module):
         return x
 
 
-class UNetForDDPM(nn.Module):
+class UNet(nn.Module):
     # "The job of the network $\epsilon_{\theta}(x_{t}, t)$ is to take in a batch ofnoisy images and their respective noise levels, and output the noise added to the input."
     # "The network takes a batch of noisy images of shape (b, n, h, w) and a batch of noise levels of shape (b, 1) as input, and returns a tensor of shape (b, n, h, w)."
     def __init__(self, n_channels, n_timesteps, time_dim):
@@ -174,7 +174,7 @@ class UNetForDDPM(nn.Module):
 
 if __name__ == "__main__":
     n_channels = 3
-    model = UNetForDDPM(n_channels=n_channels, n_timesteps=200, time_dim=100)
+    model = UNet(n_channels=n_channels, n_timesteps=200, time_dim=100)
     x = torch.randn(4, n_channels, 28, 28)
     t = torch.full(size=(4, 1), fill_value=30, dtype=torch.long)
     out = model(x, t=t)

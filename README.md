@@ -29,7 +29,7 @@ $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \
 <!-- - The joint distribution $p_{\theta}(x_{0:T})$ is called the reverse process, and it is defined as a Markov chain with learned Gaussian transitions starting at $p(x_{T}) = \mathcal{N}(x_{T};0,I)$ (Comment: The variable $x_{T}$ follows normal distribution with mean $0$ and variance $I$.):
 $$p_{\theta}(x_{t - 1} \vert x_{t}) = \mathcal{N}(x_{t - 1}; \mu_{\theta}(x_{t}, t), \Sigma_{\theta}(x_{t}, t))$$
 <!-- $$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \vert x_{t})$$ -->
-- (Comment: On reverse process, $x_{t - 1}$ follows normal distribution with mean $\mu_{\theta}$ and variance $\Sigma_{\theta}$ given $x_{t}$.)
+<!-- - (Comment: On reverse process, $x_{t - 1}$ follows normal distribution with mean $\mu_{\theta}$ and variance $\Sigma_{\theta}$ given $x_{t}$.)
 - What distinguishes diffusion models from other types of latent variable models is that the approximate posterior $q(x_{1:T} | x_{0})$, called the forward process or diffusion process, is fixed to a Markov chain that gradually adds Gaussian noise to the data according to a variance schedule $β_{1}, \ldots, β_{T}$ ($0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$):
 $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \beta_{t}I)$$
 $$q(x_{1:T} | x_{0}) = \prod^{T}_{t = 1}q(x_{t} \vert x_{t - 1})$$
@@ -53,6 +53,8 @@ $$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\big
 - For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
 $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
 - where $p$ and $q$ denote the probability densities of $P$ and $Q$. -->
+## CelebA Dataset
+- ![](https://github.com/w86763777/pytorch-ddpm/assets/105417680/dd4d2477-c5c6-4d5e-8db4-d27a1a31c2b0)
 ## References
 - https://huggingface.co/blog/annotated-diffusion
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1

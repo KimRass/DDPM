@@ -18,9 +18,11 @@ from utils import (
     get_noise,
     sample_timestep,
     get_elapsed_time,
+    modify_state_dict,
+    extract,
 )
 from celeba import CelebADataset
-from ddpm import DDPMForCelebA
+from ddpm import DDPM
 
 
 def get_args():
@@ -30,7 +32,7 @@ def get_args():
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--resume_from", type=str, required=False)
-    parser.add_argument("--n_timesteps", type=int, required=False)
+    parser.add_argument("--n_timesteps", type=int, required=False, default=1000)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
@@ -45,21 +47,53 @@ def save_checkpoint(epoch, ddpm, save_path):
         "time_dimension": ddpm.time_dim,
         "initial_beta": ddpm.init_beta,
         "final_beta": ddpm.fin_beta,
-        "model": ddpm.state_dict(),
+        "model": modify_state_dict(ddpm.state_dict()),
     }
     torch.save(state_dict, str(save_path))
 
 
 def get_ddpm_from_checkpoint(ckpt_path, device):
     state_dict = torch.load(ckpt_path, map_location=device)
-    ddpm = DDPMForCelebA(
+    ddpm = DDPM(
         n_timesteps=state_dict["n_timesteps"],
         time_dim=state_dict["time_dimension"],
         init_beta=state_dict["initial_beta"],
         fin_beta=state_dict["final_beta"],
     ).to(device)
     ddpm.load_state_dict(state_dict["model"])
-    return ddpm
+
+    epoch = state_dict["epoch"]
+    return ddpm, epoch
+
+
+@torch.no_grad()
+def generate_image(ddpm, batch_size, n_channels, img_size):
+    ddpm.eval()
+    # Sample pure noise from a Gaussian distribution.
+    # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
+    x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device)
+    for t in range(ddpm.n_timesteps - 1, -1, -1):
+        # Estimate noise to be removed.
+        batched_t = torch.full(
+            size=(batch_size, 1), fill_value=t, dtype=torch.long, device=ddpm.device,
+        )
+        eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
+
+        beta_t = extract(ddpm.beta, t=t)
+        alpha_t = extract(ddpm.alpha, t=t)
+        alpha_bar_t = extract(ddpm.alpha_bar, t=t)
+
+        # Partially denoise image.
+        # "$$\mu_{\theta}(x_{t}, t) =
+        # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
+        x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+
+        if t > 0:
+            eps = get_noise(
+                batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device,
+            ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
+            x += (beta_t ** 0.5) * eps
+    return x
 
 
 if __name__ == "__main__":
@@ -70,16 +104,16 @@ if __name__ == "__main__":
     DEVICE = get_device()
 
     if args.resume_from is not None:
-        ddpm = get_ddpm_from_checkpoint(ckpt_path=args.resume_from, device=DEVICE)
-        init_epoch = 200
+        ddpm, init_epoch = get_ddpm_from_checkpoint(ckpt_path=args.resume_from, device=DEVICE)
     else:
-        ddpm = DDPMForCelebA(
+        ddpm = DDPM(
             n_timesteps=args.n_timesteps,
-            time_dim=CONFIG["TIME_DIM"],
+            # time_dim=CONFIG["TIME_DIM"],
             init_beta=CONFIG["INIT_BETA"],
             fin_beta=CONFIG["FIN_BETA"],
         ).to(DEVICE)
         init_epoch = 0
+    # ddpm = torch.compile(ddpm)
 
     crit = nn.MSELoss()
 
@@ -94,6 +128,7 @@ if __name__ == "__main__":
         pin_memory=True,
         drop_last=True,
     )
+    print(f"Number of train data samples: {len(train_ds):,}")
 
     optim = Adam(ddpm.parameters(), lr=CONFIG["LR"])
 
@@ -131,7 +166,7 @@ if __name__ == "__main__":
             ):
                 noisy_image = ddpm(x0, t=t, eps=eps)
                 # image_to_grid(noisy_image, n_cols=n_cols).show()
-                pred_eps = ddpm.estimate_noise(noisy_image, t=t) # (b, 1, `img_size`, `img_size`)
+                pred_eps = ddpm.estimate_noise(x=noisy_image, t=t)
                 # image_to_grid(pred_eps, n_cols=n_cols).show()
                 loss = crit(pred_eps, eps)
 
