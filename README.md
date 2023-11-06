@@ -56,6 +56,17 @@ $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\big
 ## CelebA Dataset
 <!-- - ![](https://github.com/w86763777/pytorch-ddpm/assets/105417680/dd4d2477-c5c6-4d5e-8db4-d27a1a31c2b0) -->
 - <img src="https://github.com/w86763777/pytorch-ddpm/assets/105417680/dd4d2477-c5c6-4d5e-8db4-d27a1a31c2b0" width="400">
+## Training
+```python
+IMG_SIZE = 32
+BATCH_SIZE = 256
+LR = 0.0001
+```
+```python
+IMG_SIZE = 64
+BATCH_SIZE = 64
+LR = 0.00005
+```
 ## References
 - https://huggingface.co/blog/annotated-diffusion
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1

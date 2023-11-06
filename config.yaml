@@ -1,10 +1,7 @@
 # "We set T = 1000 without a sweep, and we chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
 INIT_BETA: 0.0001
 FIN_BETA: 0.02
-# N_TIMESTEPS: 280
-# N_TIMESTEPS: 1000
 # TIME_DIM: 100
-# IMG_SIZE: 28
 # IMG_SIZE: 32
 LR: 0.0001 # Suitable for batch size of 1,024.
 N_CHANNELS: 3
