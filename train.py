@@ -31,9 +31,9 @@ def get_args():
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--n_cpus", type=int, required=False, default=0)
     parser.add_argument("--resume_from", type=str, required=False)
     parser.add_argument("--n_timesteps", type=int, required=False, default=1000)
-    parser.add_argument("--n_cpus", type=int, required=False, default=0)
     parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()

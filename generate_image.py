@@ -28,10 +28,9 @@ def get_args():
 
 
 @torch.no_grad()
-# def generate_gif(ddpm, batch_size, n_channels, img_size, n_frames, gif_path, device):
-def generate_gif(ddpm, batch_size, n_channels, img_size, gif_path, device):
-    # frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint8")
-    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=ddpm.n_timesteps, dtype="uint8")
+def generate_gif(ddpm, batch_size, n_channels, img_size, n_frames, gif_path, device):
+# def generate_gif(ddpm, batch_size, n_channels, img_size, gif_path, device):
+    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint16")
 
     ddpm.eval()
     with imageio.get_writer(gif_path, mode="I") as writer:
@@ -85,7 +84,7 @@ if __name__ == "__main__":
         img_size=CONFIG["IMG_SIZE"],
         n_channels=CONFIG["N_CHANNELS"],
         batch_size=args.batch_size,
-        # n_frames=100,
+        n_frames=100,
         gif_path=args.gif_path,
         device=DEVICE,
     )
