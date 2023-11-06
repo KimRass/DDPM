@@ -30,6 +30,7 @@ def get_args():
 
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
+    parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
     parser.add_argument("--resume_from", type=str, required=False)
@@ -120,7 +121,8 @@ if __name__ == "__main__":
     crit = nn.MSELoss()
 
     train_ds = CelebADataset(
-        data_dir=args.data_dir, img_size=CONFIG["IMG_SIZE"], mean=CONFIG["MEAN"], std=CONFIG["STD"],
+        # data_dir=args.data_dir, img_size=CONFIG["IMG_SIZE"], mean=CONFIG["MEAN"], std=CONFIG["STD"],
+        data_dir=args.data_dir, img_size=args.img_size, mean=CONFIG["MEAN"], std=CONFIG["STD"],
     )
     train_dl = DataLoader(
         train_ds,
@@ -152,7 +154,8 @@ if __name__ == "__main__":
             eps = get_noise(
                 batch_size=args.batch_size,
                 n_channels=CONFIG["N_CHANNELS"],
-                img_size=CONFIG["IMG_SIZE"],
+                # img_size=CONFIG["IMG_SIZE"],
+                img_size=args.img_size,
                 device=DEVICE,
             ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
 
