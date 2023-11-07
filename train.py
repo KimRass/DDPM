@@ -14,12 +14,10 @@ from time import time
 from utils import (
     load_config,
     get_device,
-    image_to_grid,
     get_noise,
     sample_timestep,
     get_elapsed_time,
     modify_state_dict,
-    extract,
 )
 from celeba import CelebADataset
 from ddpm import DDPM
@@ -32,6 +30,7 @@ def get_args():
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
     parser.add_argument("--resume_from", type=str, required=False)
     parser.add_argument("--n_timesteps", type=int, required=False, default=1000)
@@ -46,7 +45,6 @@ def save_checkpoint(epoch, ddpm, save_path):
     state_dict = {
         "epoch": epoch,
         "n_timesteps": ddpm.n_timesteps,
-        # "time_dimension": ddpm.time_dim,
         "initial_beta": ddpm.init_beta,
         "final_beta": ddpm.fin_beta,
         "model": modify_state_dict(ddpm.state_dict()),
@@ -89,7 +87,6 @@ if __name__ == "__main__":
     crit = nn.MSELoss()
 
     train_ds = CelebADataset(
-        # data_dir=args.data_dir, img_size=CONFIG["IMG_SIZE"], mean=CONFIG["MEAN"], std=CONFIG["STD"],
         data_dir=args.data_dir, img_size=args.img_size, mean=CONFIG["MEAN"], std=CONFIG["STD"],
     )
     train_dl = DataLoader(
