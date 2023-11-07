@@ -67,7 +67,7 @@ BATCH_SIZE = 64
 LR = 0.00005
 ``` -->
 ## Generated Image Sample
-- <img src="https://imgur.com/llay3Eq.gif" width="500">
+- <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="300">
 - How to generate images
     ```bash
     # e.g.,
