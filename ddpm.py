@@ -52,6 +52,6 @@ class DDPM(nn.Module):
         noisy_image = self._sample_from_q(x0=x0, t=t, eps=eps)
         return noisy_image
 
-    def estimate_noise(self, x, t):
+    def predict_noise(self, x, t):
         # The model returns its estimation of the noise that was added.
         return self.model(x, t)

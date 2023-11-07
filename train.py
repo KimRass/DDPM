@@ -25,7 +25,7 @@ from celeba import CelebADataset
 from ddpm import DDPM
 
 
-def get_args():
+def _get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--run_id", type=str, required=True)
@@ -35,21 +35,80 @@ def get_args():
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
-    parser.add_argument("--resume_from", type=str, required=False)
     parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()
     return args
 
 
+def get_config():
+    config = load_config(Path(__file__).parent/"config.yaml")
+    args = _get_args()
+    config["RUN_ID"] = args.run_id
+    config["DATA_DIR"] = args.data_dir
+    config["N_EPOCHS"] = args.n_epochs
+    config["IMG_SIZE"] = args.img_size
+    config["BATCH_SIZE"] = args.batch_size
+    config["LR"] = args.lr
+    config["N_CPUS"] = args.n_cpus
+    config["TORCH_COMPILE"] = args.torch_compile
+
+    config["PARENT_DIR"] = Path(__file__).resolve().parent
+    config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"
+    config["CKPT_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
+
+    config["DEVICE"] = get_device()
+    return config
+
+
+def init_wandb(run_id, img_size):
+    wandb.init(project="DDPM", resume=run_id)
+    wandb.config.update(
+        {
+            "IMG_SIZE": img_size,
+        },
+        allow_val_change=True,
+    )
+    print(wandb.config)
+
+
+def train_single_step(x0, ddpm, optim, scaler, crit, config):
+    x0 = x0.to(config["DEVICE"])
+
+    t = sample_timestep(
+        n_timesteps=config["N_TIMESTEPS"], batch_size=config["BATCH_SIZE"], device=config["DEVICE"],
+    ) # "$t \sim Uniform({1, \ldots, T})$"
+    eps = get_noise(
+        batch_size=config["BATCH_SIZE"],
+        n_channels=config["N_CHANNELS"],
+        img_size=config["IMG_SIZE"],
+        device=config["DEVICE"],
+    ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
+
+    with torch.autocast(
+        device_type=config["DEVICE"].type,
+        dtype=torch.float16 if config["DEVICE"].type == "cuda" else torch.bfloat16,
+    ):
+        noisy_image = ddpm(x0, t=t, eps=eps)
+        pred_eps = ddpm.predict_noise(x=noisy_image, t=t)
+        loss = crit(pred_eps, eps)
+
+    optim.zero_grad()
+    if scaler is not None:
+        scaler.scale(loss).backward()
+        scaler.step(optim)
+        scaler.update()
+    else:
+        loss.backward()
+        optim.step()
+    return loss
+
+
 def save_checkpoint(epoch, ddpm, scaler, optim, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
     state_dict = {
         "epoch": epoch,
-        "n_timesteps": ddpm.n_timesteps,
-        "initial_beta": ddpm.init_beta,
-        "final_beta": ddpm.fin_beta,
-        "model": modify_state_dict(ddpm.state_dict()),
+        "ddpm": modify_state_dict(ddpm.state_dict()),
         "scaler": scaler.state_dict(),
         "optimizer": optim.state_dict(),
     }
@@ -57,129 +116,77 @@ def save_checkpoint(epoch, ddpm, scaler, optim, save_path):
     wandb.save(str(save_path), base_path=Path(save_path).parent)
 
 
-def load_checkpoint(ckpt_path, device):
-    state_dict = torch.load(str(ckpt_path), map_location=device)
-    ddpm = DDPM(
-        n_timesteps=state_dict["n_timesteps"],
-        init_beta=state_dict["initial_beta"],
-        fin_beta=state_dict["final_beta"],
-    ).to(device)
-    ddpm.load_state_dict(state_dict["model"])
-
-    epoch = state_dict["epoch"]
-    return ddpm, epoch
-
-
-if __name__ == "__main__":
-    PARENT_DIR = Path(__file__).resolve().parent
-    CKPTS_DIR = PARENT_DIR/"checkpoints"
-    CKPT_PATH = CKPTS_DIR/"checkpoint.tar"
-
-    CONFIG = load_config(Path(__file__).parent/"config.yaml")
-    set_seed(CONFIG["SEED"])
-
-    args = get_args()
-    run = wandb.init(project="DDPM", resume=args.run_id)
-    if args.run_id is None:
-        args.run_id = wandb.run.name
-    wandb.config.update(
-        {
-            "IMG_SIZE": args.img_size,
-        },
-        allow_val_change=True,
-    )
-    print(wandb.config)
-
-    DEVICE = get_device()
-
-    if wandb.run.resumed:
-        state_dict = torch.load(str(CKPT_PATH), map_location=DEVICE)
-        ddpm, init_epoch = load_checkpoint(ckpt_path=CKPT_PATH, device=DEVICE)
-    else:
-        ddpm = DDPM(
-            n_timesteps=CONFIG["N_TIMESTEPS"],
-            init_beta=CONFIG["INIT_BETA"],
-            fin_beta=CONFIG["FIN_BETA"],
-        ).to(DEVICE)
-        init_epoch = 0
-    if args.torch_compile:
-        ddpm = torch.compile(ddpm)
-
-    crit = nn.MSELoss()
-
+def get_tain_dl(config):
     train_ds = CelebADataset(
-        data_dir=args.data_dir, img_size=args.img_size, mean=CONFIG["MEAN"], std=CONFIG["STD"],
+        data_dir=config["DATA_DIR"], img_size=config["IMG_SIZE"], mean=config["MEAN"], std=config["STD"],
     )
     train_dl = DataLoader(
         train_ds,
-        batch_size=args.batch_size,
+        batch_size=config["BATCH_SIZE"],
         shuffle=True,
-        num_workers=args.n_cpus,
+        num_workers=config["N_CPUS"],
         pin_memory=True,
         drop_last=True,
     )
     print(f"Number of train data samples: {len(train_ds):,}")
+    return train_dl
 
+
+if __name__ == "__main__":
+    CONFIG = get_config()
+
+    set_seed(CONFIG["SEED"])
+
+    init_wandb(run_id=CONFIG["RUN_ID"], img_size=CONFIG["IMG_SIZE"])
+
+    ddpm = DDPM(
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        init_beta=CONFIG["INIT_BETA"],
+        fin_beta=CONFIG["FIN_BETA"],
+    ).to(CONFIG["DEVICE"])
+    if CONFIG["TORCH_COMPILE"]:
+        ddpm = torch.compile(ddpm)
     optim = Adam(ddpm.parameters(), lr=CONFIG["LR"])
+    scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
+    crit = nn.MSELoss()
 
-    scaler = GradScaler() if DEVICE.type == "cuda" else None
+    if wandb.run.resumed:
+        state_dict = torch.load(str(CONFIG["CKPT_PATH"]), map_location=CONFIG["DEVICE"])
+        ddpm.load_state_dict(state_dict["ddpm"])
+        optim.load_state_dict(state_dict["optimizer"])
+        scaler.load_state_dict(state_dict["scaler"])
+        init_epoch = state_dict["epoch"]
+        print(f"Resuming from epoch {init_epoch + 1}...")
+    else:
+        init_epoch = 0
+
+    train_dl = get_tain_dl(CONFIG)
 
     best_loss = math.inf
-    n_cols = int(args.batch_size ** 0.5)
-    for epoch in range(init_epoch + 1, args.n_epochs + 1):
+    n_cols = int(CONFIG["BATCH_SIZE"] ** 0.5)
+    for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
         accum_loss = 0
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
-            # break
-            x0 = x0.to(DEVICE)
-            # image_to_grid(x0, n_cols=n_cols).show()
-
-            t = sample_timestep(
-                n_timesteps=ddpm.n_timesteps, batch_size=args.batch_size, device=DEVICE,
-            ) # "$t \sim Uniform({1, \ldots, T})$"
-            eps = get_noise(
-                batch_size=args.batch_size,
-                n_channels=CONFIG["N_CHANNELS"],
-                # img_size=CONFIG["IMG_SIZE"],
-                img_size=args.img_size,
-                device=DEVICE,
-            ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-
-            with torch.autocast(
-                device_type=DEVICE.type,
-                dtype=torch.float16 if DEVICE.type == "cuda" else torch.bfloat16,
-            ):
-                noisy_image = ddpm(x0, t=t, eps=eps)
-                # image_to_grid(noisy_image, n_cols=n_cols).show()
-                pred_eps = ddpm.estimate_noise(x=noisy_image, t=t)
-                # image_to_grid(pred_eps, n_cols=n_cols).show()
-                loss = crit(pred_eps, eps)
-
-            optim.zero_grad()
-            if DEVICE.type == "cuda" and scaler is not None:
-                scaler.scale(loss).backward()
-                scaler.step(optim)
-                scaler.update()
-            else:
-                loss.backward()
-                optim.step()
-
+            loss = train_single_step(
+                x0=x0, ddpm=ddpm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
+            )
             accum_loss += loss.item()
-
         accum_loss /= len(train_dl)
-        accum_loss /= args.batch_size
+        accum_loss /= CONFIG["BATCH_SIZE"]
 
-        msg = f"[ {epoch}/{args.n_epochs} ]"
+        msg = f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
         msg += f"[ {get_elapsed_time(start_time)} ]"
         msg += f"[ Loss: {accum_loss:.7f} ]"
 
         if accum_loss < best_loss:
+            filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
             save_checkpoint(
                 epoch=epoch,
                 ddpm=ddpm,
                 scaler=scaler,
                 optim=optim,
-                save_path=Path(__file__).resolve().parent/f"checkpoints/ddpm_epoch_{epoch}.pth",
+                save_path=CONFIG["CKPTS_DIR"]/filename,
             )
             msg += f" (Saved checkpoint.)"
             best_loss = accum_loss

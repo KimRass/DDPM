@@ -62,11 +62,11 @@ def generate_images(
             batched_t = torch.full(
                 size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
             )
-            eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
+            eps_theta = ddpm.predict_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
 
-            beta_t = extract(ddpm.beta.to(device), t=t, device=device)
-            alpha_t = extract(ddpm.alpha, t=t, device=device)
-            alpha_bar_t = extract(ddpm.alpha_bar, t=t, device=device)
+            beta_t = extract(ddpm.beta.to(device), t=t)
+            alpha_t = extract(ddpm.alpha, t=t)
+            alpha_bar_t = extract(ddpm.alpha_bar, t=t)
 
             # Partially denoise image.
             # "$$\mu_{\theta}(x_{t}, t) =
