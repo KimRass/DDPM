@@ -18,27 +18,33 @@ def get_args():
 
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
-    parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--save_path", type=str, required=True)
+    parser.add_argument("--img_size", type=int, required=False, default=32)
+    parser.add_argument("--n_frames", type=int, required=False, default=100)
 
     args = parser.parse_args()
     return args
 
 
+def _get_frame(x):
+    b, _, _, _ = x.shape
+    grid = image_to_grid(x, n_cols=int(b ** 0.5))
+    frame = np.array(grid)
+    return frame
+
+
 @torch.no_grad()
 def generate_images(
-    ddpm, batch_size, n_channels, img_size, save_path, n_frames=100, image_only=False,
+    ddpm, batch_size, n_channels, img_size, save_path, device, n_frames=100, image_only=False,
 ):
     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint16")
 
     ddpm.eval()
     gif_path = Path(save_path).with_suffix(".gif")
-    device = next(ddpm.parameters()).device
     with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
         x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        # for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
         for t in tqdm(range(ddpm.n_timesteps - 1, -1, -1)):
             batched_t = torch.full(
                 size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
@@ -60,20 +66,19 @@ def generate_images(
                 ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
                 x += (beta_t ** 0.5) * eps
 
-            if (t == 0) or (not image_only and t in frame_indices):
-            # if (t == 0) or (not image_only and idx in frame_indices):
-            # if idx in frame_indices or t == 0:
-                grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
-                frame = np.array(grid)
+            if (not image_only) and (t in frame_indices):
+                frame = _get_frame(x)
                 writer.append_data(frame)
 
-            # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
-            
-            if not image_only and t == 0:
-                for _ in range(60):
-                    writer.append_data(frame)
+            if t == 0:
+                if not image_only: # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
+                    for _ in range(60):
+                        frame = _get_frame(x)
+                        writer.append_data(frame)
 
+                grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
                 save_image(grid, path=save_path)
+
 
 if __name__ == "__main__":
     CONFIG = load_config(Path(__file__).parent/"config.yaml")
@@ -89,4 +94,5 @@ if __name__ == "__main__":
         n_channels=CONFIG["N_CHANNELS"],
         batch_size=args.batch_size,
         save_path=args.save_path,
+        device=DEVICE,
     )
