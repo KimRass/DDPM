@@ -51,9 +51,9 @@ def generate_images(
             )
             eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
 
-            beta_t = extract(ddpm.beta, t=t)
-            alpha_t = extract(ddpm.alpha, t=t)
-            alpha_bar_t = extract(ddpm.alpha_bar, t=t)
+            beta_t = extract(ddpm.beta, t=t, device=device)
+            alpha_t = extract(ddpm.alpha, t=t, device=device)
+            alpha_bar_t = extract(ddpm.alpha_bar, t=t, device=device)
 
             # Partially denoise image.
             # "$$\mu_{\theta}(x_{t}, t) =
