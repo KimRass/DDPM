@@ -54,18 +54,20 @@ $$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\big
 $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
 - where $p$ and $q$ denote the probability densities of $P$ and $Q$. -->
 ## Pre-trained Models
-- [ddpm_celeba.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing)
-    - Trained on CelebA dataset for 29epochs
+- [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing)
+    - Trained on CelebA dataset for 29 epochs
     ```python
     IMG_SIZE = 32
     BATCH_SIZE = 256
     LR = 0.0001
     ```
-<!-- ```python
-IMG_SIZE = 64
-BATCH_SIZE = 64
-LR = 0.00005
-``` -->
+- [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1N2EhITXPR556adGCLiDqBuaUl39omXTd/view?usp=sharing)
+    - Trained on CelebA dataset for 28 epochs
+    ```python
+    IMG_SIZE = 64
+    BATCH_SIZE = 64
+    LR = 0.00005
+    ```
 ## Generated Image Sample
 - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="300">
 - How to generate images

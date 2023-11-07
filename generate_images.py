@@ -56,7 +56,7 @@ def generate_images(
     gif_path = Path(save_path).with_suffix(".gif")
     with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
-        # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
+        # "1: $x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$" ("Algorithm 2")
         x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
         for t in tqdm(range(ddpm.n_timesteps - 1, -1, -1)):
             batched_t = torch.full(
@@ -76,7 +76,7 @@ def generate_images(
             if t > 0:
                 eps = get_noise(
                     batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
-                ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
+                ) # "3: $z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$" ("Algorithm 2")
                 x += (beta_t ** 0.5) * eps
 
             if (not image_only) and (t in frame_indices):
