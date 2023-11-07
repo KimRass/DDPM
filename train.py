@@ -28,13 +28,13 @@ from ddpm import DDPM
 def _get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--run_id", type=str, required=True)
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
+    parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()
@@ -178,6 +178,13 @@ if __name__ == "__main__":
         msg = f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
         msg += f"[ {get_elapsed_time(start_time)} ]"
         msg += f"[ Loss: {accum_loss:.7f} ]"
+
+        wandb.log(
+            {
+                "Loss": accum_loss,
+            },
+            step=epoch,
+        )
 
         if accum_loss < best_loss:
             filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
