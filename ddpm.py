@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 
 from utils import extract, get_noise
-# from model import UNet
 from model2 import UNet
 
 

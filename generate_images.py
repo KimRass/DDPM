@@ -27,12 +27,13 @@ def get_args():
 
 @torch.no_grad()
 def generate_images(
-    ddpm, batch_size, n_channels, img_size, n_frames, save_path, device, image_only=False,
+    ddpm, batch_size, n_channels, img_size, save_path, n_frames=100, image_only=False,
 ):
     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint16")
 
     ddpm.eval()
     gif_path = Path(save_path).with_suffix(".gif")
+    device = next(ddpm.parameters()).device
     with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
@@ -88,5 +89,4 @@ if __name__ == "__main__":
         n_channels=CONFIG["N_CHANNELS"],
         batch_size=args.batch_size,
         save_path=args.save_path,
-        device=DEVICE,
     )

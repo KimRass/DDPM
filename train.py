@@ -58,7 +58,6 @@ def get_ddpm_from_checkpoint(ckpt_path, device):
     state_dict = torch.load(ckpt_path, map_location=device)
     ddpm = DDPM(
         n_timesteps=state_dict["n_timesteps"],
-        # time_dim=state_dict["time_dimension"],
         init_beta=state_dict["initial_beta"],
         fin_beta=state_dict["final_beta"],
     ).to(device)
