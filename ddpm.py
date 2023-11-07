@@ -13,20 +13,13 @@ def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
 
 
 class DDPM(nn.Module):
-    # def __init__(self, n_timesteps, time_dim, init_beta, fin_beta):
     def __init__(self, n_timesteps, init_beta, fin_beta):
         super().__init__()
 
         self.n_timesteps = n_timesteps
-        # self.time_dim = time_dim
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        # self.model = UNet(
-        #     n_channels=3,
-        #     n_timesteps=n_timesteps,
-        #     time_dim=time_dim,
-        # )
         self.model = UNet(n_timesteps=n_timesteps)
 
         # "We set the forward process variances to constants increasing linearly from $\beta_{1} = 10^{-4}$

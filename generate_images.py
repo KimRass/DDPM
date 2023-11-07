@@ -10,7 +10,7 @@ import argparse
 from tqdm import tqdm
 
 from utils import load_config, get_device, get_noise, extract, image_to_grid, save_image
-from train import get_ddpm_from_checkpoint
+from ddpm import DDPM
 
 
 def get_args():
@@ -24,6 +24,19 @@ def get_args():
 
     args = parser.parse_args()
     return args
+
+
+def get_ddpm_from_checkpoint(ckpt_path, device):
+    state_dict = torch.load(str(ckpt_path), map_location=device)
+    ddpm = DDPM(
+        n_timesteps=state_dict["n_timesteps"],
+        init_beta=state_dict["initial_beta"],
+        fin_beta=state_dict["final_beta"],
+    ).to(device)
+    ddpm.load_state_dict(state_dict["model"])
+
+    epoch = state_dict["epoch"]
+    return ddpm, epoch
 
 
 def _get_frame(x):
