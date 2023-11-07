@@ -79,7 +79,6 @@ if __name__ == "__main__":
     else:
         ddpm = DDPM(
             n_timesteps=args.n_timesteps,
-            # time_dim=CONFIG["TIME_DIM"],
             init_beta=CONFIG["INIT_BETA"],
             fin_beta=CONFIG["FIN_BETA"],
         ).to(DEVICE)

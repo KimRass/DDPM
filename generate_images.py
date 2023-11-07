@@ -51,7 +51,7 @@ def generate_images(
             )
             eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
 
-            beta_t = extract(ddpm.beta, t=t, device=device)
+            beta_t = extract(ddpm.beta.to(device), t=t, device=device)
             alpha_t = extract(ddpm.alpha, t=t, device=device)
             alpha_bar_t = extract(ddpm.alpha_bar, t=t, device=device)
 
@@ -71,11 +71,6 @@ def generate_images(
                 writer.append_data(frame)
 
             if t == 0:
-                if not image_only: # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
-                    for _ in range(60):
-                        frame = _get_frame(x)
-                        writer.append_data(frame)
-
                 grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
                 save_image(grid, path=save_path)
 

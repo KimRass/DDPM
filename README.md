@@ -67,8 +67,15 @@ BATCH_SIZE = 64
 LR = 0.00005
 ``` -->
 ## Generated Image Sample
-- Trained on CelebA dataset for 29epochs
-    - <img src="https://github.com/KimRass/DDPM/assets/67457712/c18cfe26-87fa-4d9b-80e6-2d5bc0fa43bc" width="300">
+- <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="400">
+- How to generate images
+    ```bash
+    # e.g.,
+    python3 generate_images.py\
+        --ckpt_path="../ddpm_celeba.pth"\
+        --batch_size=36\
+        --save_path="generated_images/4.jpg"
+    ```
 ## References
 - https://huggingface.co/blog/annotated-diffusion
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1

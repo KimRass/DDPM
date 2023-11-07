@@ -75,8 +75,8 @@ def show_forward_process(ddpm, dl, device):
         break
 
 
-def extract(x, t, device):
-    return x[t].view(-1, 1, 1, 1).to(device)
+def extract(x, t):
+    return x[t].view(-1, 1, 1, 1)
 
 
 def get_noise(batch_size, n_channels, img_size, device):
