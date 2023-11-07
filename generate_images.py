@@ -20,14 +20,15 @@ def get_args():
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--save_path", type=str, required=True)
-    parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
     return args
 
 
 @torch.no_grad()
-def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, save_path, device):
+def generate_images(
+    ddpm, batch_size, n_channels, img_size, n_frames, save_path, device, image_only=False,
+):
     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint16")
 
     ddpm.eval()
@@ -36,7 +37,8 @@ def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, save_path, 
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
         x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
+        # for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
+        for t in tqdm(range(ddpm.n_timesteps - 1, -1, -1)):
             batched_t = torch.full(
                 size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
             )
@@ -57,14 +59,17 @@ def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, save_path, 
                 ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
                 x += (beta_t ** 0.5) * eps
 
-            if idx in frame_indices or t == 0:
+            if (t == 0) or (not image_only and t in frame_indices):
+            # if (t == 0) or (not image_only and idx in frame_indices):
+            # if idx in frame_indices or t == 0:
                 grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
                 frame = np.array(grid)
                 writer.append_data(frame)
 
             # gif 파일에서 마지막 프레임을 오랫동안 보여줍니다.
-            if idx == ddpm.n_timesteps - 1:
-                for _ in range(100):
+            
+            if not image_only and t == 0:
+                for _ in range(60):
                     writer.append_data(frame)
 
                 save_image(grid, path=save_path)
@@ -77,7 +82,7 @@ if __name__ == "__main__":
     DEVICE = get_device()
 
     ddpm, _ = get_ddpm_from_checkpoint(ckpt_path=args.ckpt_path, device=DEVICE)
-    generate_image(
+    generate_images(
         ddpm=ddpm,
         img_size=args.img_size,
         n_channels=CONFIG["N_CHANNELS"],

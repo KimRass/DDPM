@@ -68,36 +68,6 @@ def get_ddpm_from_checkpoint(ckpt_path, device):
     return ddpm, epoch
 
 
-@torch.no_grad()
-def generate_image(ddpm, batch_size, n_channels, img_size):
-    ddpm.eval()
-    # Sample pure noise from a Gaussian distribution.
-    # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-    x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device)
-    for t in range(ddpm.n_timesteps - 1, -1, -1):
-        # Estimate noise to be removed.
-        batched_t = torch.full(
-            size=(batch_size, 1), fill_value=t, dtype=torch.long, device=ddpm.device,
-        )
-        eps_theta = ddpm.estimate_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
-
-        beta_t = extract(ddpm.beta, t=t)
-        alpha_t = extract(ddpm.alpha, t=t)
-        alpha_bar_t = extract(ddpm.alpha_bar, t=t)
-
-        # Partially denoise image.
-        # "$$\mu_{\theta}(x_{t}, t) =
-        # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
-        x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
-
-        if t > 0:
-            eps = get_noise(
-                batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=ddpm.device,
-            ) # "$z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-            x += (beta_t ** 0.5) * eps
-    return x
-
-
 if __name__ == "__main__":
     CONFIG = load_config(Path(__file__).parent/"config.yaml")
 
