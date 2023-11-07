@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from utils import extract, get_noise
-from model2 import UNet
+from model import UNet
 
 
 def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):

@@ -1,45 +1,39 @@
 # References:
-    # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
-    # https://nn.labml.ai/diffusion/ddpm/unet.html
+    # https://github.com/w86763777/pytorch-ddpm/blob/master/model.py
 
+import math
 import torch
-import torch.nn as nn
+from torch import nn
+from torch.nn import init
+from torch.nn import functional as F
 
 
-class ConvBlock(nn.Module):
-    def __init__(
-        self, in_channels, out_channels, shape, kernel_size=3, stride=1, padding=1, activ=None, normalize=True,
-    ):
-        super().__init__()
-
-        self.normalize = normalize
-
-        if normalize:
-            self.norm = nn.LayerNorm(shape)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)
-        self.activ = nn.SiLU() if activ is None else activ
-
+class Swish(nn.Module):
     def forward(self, x):
-        if self.normalize:
-            x = self.norm(x)
-        x = self.conv1(x)
-        x = self.activ(x)
-        x = self.conv2(x)
-        x = self.activ(x)
-        return x
+        return x * torch.sigmoid(x)
 
 
 class TimeEmbedding(nn.Module):
-    def __init__(self, n_timesteps, dim):
+    def __init__(self, n_timesteps, d_model, dim):
+        assert d_model % 2 == 0
         super().__init__()
 
-        self.n_timesteps = n_timesteps
-        self.dim = dim
+        emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000)
+        emb = torch.exp(-emb)
+        pos = torch.arange(n_timesteps).float()
+        emb = pos[:, None] * emb[None, :]
+        assert list(emb.shape) == [n_timesteps, d_model // 2]
+        emb = torch.stack([torch.sin(emb), torch.cos(emb)], dim=-1)
+        assert list(emb.shape) == [n_timesteps, d_model // 2, 2]
+        emb = emb.view(n_timesteps, d_model)
 
-        self.time_embed = nn.Embedding(n_timesteps, dim)
-        self.time_embed.weight.data = self._sinusoidal_embedding()
-        self.time_embed.requires_grad = False
+        self.timembedding = nn.Sequential(
+            nn.Embedding.from_pretrained(emb),
+            nn.Linear(d_model, dim),
+            Swish(),
+            nn.Linear(dim, dim),
+        )
+        self.initialize()
 
     def _sinusoidal_embedding(self):
         pos = torch.arange(self.n_timesteps).unsqueeze(1)
@@ -51,131 +45,218 @@ class TimeEmbedding(nn.Module):
         pe_mat[:, 1:: 2] = torch.cos(angle)
         return pe_mat
 
-    def forward(self, x):
-        return self.time_embed(x)
+    def initialize(self):
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                init.xavier_uniform_(module.weight)
+                init.zeros_(module.bias)
+
+    def forward(self, t):
+        emb = self.timembedding(t)
+        return emb
 
 
-class MLPBlock(nn.Module):
-    def __init__(self, in_features, out_features):
+class DownSample(nn.Module):
+    def __init__(self, in_ch):
         super().__init__()
+        self.main = nn.Conv2d(in_ch, in_ch, 3, stride=2, padding=1)
+        self.initialize()
 
-        self.proj1 = nn.Linear(in_features, out_features)
-        self.silu = nn.SiLU()
-        self.proj2 = nn.Linear(out_features, out_features)
+    def initialize(self):
+        init.xavier_uniform_(self.main.weight)
+        init.zeros_(self.main.bias)
+
+    def forward(self, x, temb):
+        x = self.main(x)
+        return x
+
+
+class UpSample(nn.Module):
+    def __init__(self, in_ch):
+        super().__init__()
+        self.main = nn.Conv2d(in_ch, in_ch, 3, stride=1, padding=1)
+        self.initialize()
+
+    def initialize(self):
+        init.xavier_uniform_(self.main.weight)
+        init.zeros_(self.main.bias)
+
+    def forward(self, x, temb):
+        _, _, H, W = x.shape
+        x = F.interpolate(
+            x, scale_factor=2, mode="nearest")
+        x = self.main(x)
+        return x
+
+
+class AttnBlock(nn.Module):
+    def __init__(self, in_ch):
+        super().__init__()
+        self.group_norm = nn.GroupNorm(32, in_ch)
+        self.proj_q = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+        self.proj_k = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+        self.proj_v = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+        self.proj = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+        self.initialize()
+
+    def initialize(self):
+        for module in [self.proj_q, self.proj_k, self.proj_v, self.proj]:
+            init.xavier_uniform_(module.weight)
+            init.zeros_(module.bias)
+        init.xavier_uniform_(self.proj.weight, gain=1e-5)
 
     def forward(self, x):
-        x = self.proj1(x)
-        x = self.silu(x)
-        x = self.proj2(x)
-        return x
+        B, C, H, W = x.shape
+        h = self.group_norm(x)
+        q = self.proj_q(h)
+        k = self.proj_k(h)
+        v = self.proj_v(h)
+
+        q = q.permute(0, 2, 3, 1).view(B, H * W, C)
+        k = k.view(B, C, H * W)
+        w = torch.bmm(q, k) * (int(C) ** (-0.5))
+        assert list(w.shape) == [B, H * W, H * W]
+        w = F.softmax(w, dim=-1)
+
+        v = v.permute(0, 2, 3, 1).view(B, H * W, C)
+        h = torch.bmm(w, v)
+        assert list(h.shape) == [B, H * W, C]
+        h = h.view(B, H, W, C).permute(0, 3, 1, 2)
+        h = self.proj(h)
+
+        return x + h
+
+
+class ResBlock(nn.Module):
+    def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
+        super().__init__()
+        self.block1 = nn.Sequential(
+            nn.GroupNorm(32, in_ch),
+            Swish(),
+            nn.Conv2d(in_ch, out_ch, 3, stride=1, padding=1),
+        )
+        self.temb_proj = nn.Sequential(
+            Swish(),
+            nn.Linear(tdim, out_ch),
+        )
+        self.block2 = nn.Sequential(
+            nn.GroupNorm(32, out_ch),
+            Swish(),
+            nn.Dropout(dropout),
+            nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1),
+        )
+        if in_ch != out_ch:
+            self.shortcut = nn.Conv2d(in_ch, out_ch, 1, stride=1, padding=0)
+        else:
+            self.shortcut = nn.Identity()
+        if attn:
+            self.attn = AttnBlock(out_ch)
+        else:
+            self.attn = nn.Identity()
+        self.initialize()
+
+    def initialize(self):
+        for module in self.modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                init.xavier_uniform_(module.weight)
+                init.zeros_(module.bias)
+        init.xavier_uniform_(self.block2[-1].weight, gain=1e-5)
+
+    def forward(self, x, temb):
+        h = self.block1(x)
+        h += self.temb_proj(temb)[:, :, None, None]
+        h = self.block2(h)
+
+        h = h + self.shortcut(x)
+        h = self.attn(h)
+        return h
 
 
 class UNet(nn.Module):
-    # "The job of the network $\epsilon_{\theta}(x_{t}, t)$ is to take in a batch ofnoisy images and their respective noise levels, and output the noise added to the input."
-    # "The network takes a batch of noisy images of shape (b, n, h, w) and a batch of noise levels of shape (b, 1) as input, and returns a tensor of shape (b, n, h, w)."
-    def __init__(self, n_channels, n_timesteps, time_dim):
+    def __init__(self, n_timesteps=1000, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1):
         super().__init__()
 
-        self.n_timesteps = n_timesteps
+        assert all([i < len(ch_mult) for i in attn]), "attn index out of bound"
 
-        # Sinusoidal embedding
-        self.time_embed = TimeEmbedding(n_timesteps=n_timesteps, dim=time_dim)
-
-        self.mlp_block1 = MLPBlock(time_dim, 1)
-        self.mlp_block2 = MLPBlock(time_dim, 10)
-        self.mlp_block3 = MLPBlock(time_dim, 20)
-        self.mid_mlp_block = MLPBlock(time_dim, 40)
-        self.mlp_block4 = MLPBlock(time_dim, 80)
-        self.mlp_block5 = MLPBlock(time_dim, 40)
-        self.mlp_block6 = MLPBlock(time_dim, 20)
-
-        # First half
-        self.down1 = nn.Conv2d(10, 10, 4, 2, 1)
-        self.down2 = nn.Conv2d(20, 20, 4, 2, 1)
-        self.down3 = nn.Sequential(
-            nn.Conv2d(40, 40, kernel_size=2, stride=1),
-            nn.SiLU(),
-            nn.Conv2d(40, 40, kernel_size=4, stride=2, padding=1),
+        tdim = ch * 4
+        self.time_embedding = TimeEmbedding(
+            n_timesteps=n_timesteps, d_model=ch, dim=tdim,
         )
 
-        self.b1 = nn.Sequential(
-            ConvBlock(n_channels, 10, shape=(n_channels, 28, 28)),
-            ConvBlock(10, 10, shape=(10, 28, 28)),
-            ConvBlock(10, 10, shape=(10, 28, 28)),
-        )
-        self.b2 = nn.Sequential(
-            ConvBlock(10, 20, shape=(10, 14, 14)),
-            ConvBlock(20, 20, shape=(20, 14, 14)),
-            ConvBlock(20, 20, shape=(20, 14, 14)),
-        )
-        self.b3 = nn.Sequential(
-            ConvBlock(20, 40, shape=(20, 7, 7),),
-            ConvBlock(40, 40, shape=(40, 7, 7),),
-            ConvBlock(40, 40, shape=(40, 7, 7),),
-        )
+        self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
+        self.downblocks = nn.ModuleList()
+        chs = [ch]  # record output channel when dowmsample for upsample
+        now_ch = ch
+        for i, mult in enumerate(ch_mult):
+            out_ch = ch * mult
+            for _ in range(num_res_blocks):
+                self.downblocks.append(ResBlock(
+                    in_ch=now_ch, out_ch=out_ch, tdim=tdim,
+                    dropout=dropout, attn=(i in attn)))
+                now_ch = out_ch
+                chs.append(now_ch)
+            if i != len(ch_mult) - 1:
+                self.downblocks.append(DownSample(now_ch))
+                chs.append(now_ch)
 
-        # Bottleneck
-        self.b_mid = nn.Sequential(
-            ConvBlock(40, 20, shape=(40, 3, 3)),
-            ConvBlock(20, 20, shape=(20, 3, 3)),
-            ConvBlock(20, 40, shape=(20, 3, 3)),
-        )
+        self.middleblocks = nn.ModuleList([
+            ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
+            ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
+        ])
 
-        # Second half
-        self.up1 = nn.Sequential(
-            nn.ConvTranspose2d(40, 40, kernel_size=4, stride=2, padding=1),
-            nn.SiLU(),
-            nn.ConvTranspose2d(40, 40, kernel_size=2, stride=1),
-        )
-        self.up2 = nn.ConvTranspose2d(20, 20, kernel_size=4, stride=2, padding=1)
-        self.up3 = nn.ConvTranspose2d(10, 10, kernel_size=4, stride=2, padding=1)
+        self.upblocks = nn.ModuleList()
+        for i, mult in reversed(list(enumerate(ch_mult))):
+            out_ch = ch * mult
+            for _ in range(num_res_blocks + 1):
+                self.upblocks.append(ResBlock(
+                    in_ch=chs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
+                    dropout=dropout, attn=(i in attn)))
+                now_ch = out_ch
+            if i != 0:
+                self.upblocks.append(UpSample(now_ch))
+        assert len(chs) == 0
 
-        self.b4 = nn.Sequential(
-            ConvBlock(80, 40, shape=(80, 7, 7)),
-            ConvBlock(40, 20, shape=(40, 7, 7)),
-            ConvBlock(20, 20, shape=(20, 7, 7)),
+        self.tail = nn.Sequential(
+            nn.GroupNorm(32, now_ch),
+            Swish(),
+            nn.Conv2d(now_ch, 3, kernel_size=3, stride=1, padding=1)
         )
-        self.b5 = nn.Sequential(
-            ConvBlock(40, 20, shape=(40, 14, 14)),
-            ConvBlock(20, 10, shape=(20, 14, 14)),
-            ConvBlock(10, 10, shape=(10, 14, 14)),
-        )
-        self.b_out = nn.Sequential(
-            ConvBlock(20, 10, shape=(20, 28, 28)),
-            ConvBlock(10, 10, shape=(10, 28, 28)),
-            ConvBlock(10, 10, shape=(10, 28, 28), normalize=False),
-        )
+        self.initialize()
 
-        self.conv_out = nn.Conv2d(10, n_channels, kernel_size=3, stride=1, padding=1)
+    def initialize(self):
+        init.xavier_uniform_(self.head.weight)
+        init.zeros_(self.head.bias)
+        init.xavier_uniform_(self.tail[-1].weight, gain=1e-5)
+        init.zeros_(self.tail[-1].bias)
 
-    # `x`: (b, 1, 28, 28), `t`: (b, 1)
     def forward(self, x, t):
-        b, _, _, _ = x.shape
-        t = self.time_embed(t)
+        # Timestep embedding
+        temb = self.time_embedding(t)
+        # Downsampling
+        h = self.head(x)
+        hs = [h]
+        for layer in self.downblocks:
+            h = layer(h, temb)
+            hs.append(h)
+        # Middle
+        for layer in self.middleblocks:
+            h = layer(h, temb)
+        # Upsampling
+        for layer in self.upblocks:
+            if isinstance(layer, ResBlock):
+                h = torch.cat([h, hs.pop()], dim=1)
+            h = layer(h, temb)
+        h = self.tail(h)
 
-        x1 = self.b1(x + self.mlp_block1(t).view(b, -1, 1, 1))  # (N, 10, 28, 28)
-        x2 = self.b2(self.down1(x1) + self.mlp_block2(t).view(b, -1, 1, 1))  # (N, 20, 14, 14)
-        x3 = self.b3(self.down2(x2) + self.mlp_block3(t).view(b, -1, 1, 1))  # (N, 40, 7, 7)
-
-        x_mid = self.b_mid(self.down3(x3) + self.mid_mlp_block(t).view(b, -1, 1, 1))  # (N, 40, 3, 3)
-
-        x4 = torch.cat((x3, self.up1(x_mid)), dim=1)  # (N, 80, 7, 7)
-        x4 = self.b4(x4 + self.mlp_block4(t).view(b, -1, 1, 1))  # (N, 20, 7, 7)
-
-        x5 = torch.cat((x2, self.up2(x4)), dim=1)  # (N, 40, 14, 14)
-        x5 = self.b5(x5 + self.mlp_block5(t).view(b, -1, 1, 1))  # (N, 10, 14, 14)
-
-        x = torch.cat((x1, self.up3(x5)), dim=1)  # (N, 20, 28, 28)
-        x = self.b_out(x + self.mlp_block6(t).view(b, -1, 1, 1))  # (N, 1, 28, 28)
-
-        x = self.conv_out(x)
-        return x
+        assert len(hs) == 0
+        return h
 
 
 if __name__ == "__main__":
-    n_channels = 3
-    model = UNet(n_channels=n_channels, n_timesteps=200, time_dim=100)
-    x = torch.randn(4, n_channels, 28, 28)
-    t = torch.full(size=(4, 1), fill_value=30, dtype=torch.long)
-    out = model(x, t=t)
-    out.shape
+    model = UNet(n_timesteps=1000)
+    batch_size = 2
+    img_size = 32
+    x = torch.randn(batch_size, 3, img_size, img_size)
+    t = torch.randint(1000, (batch_size, ))
+    y = model(x, t)
+    y.shape
