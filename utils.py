@@ -7,6 +7,8 @@ from torchvision.utils import make_grid
 import torchvision.transforms.functional as TF
 from datetime import timedelta
 from time import time
+from PIL import Image
+from pathlib import Path
 import yaml
 from collections import OrderedDict
 
@@ -23,6 +25,18 @@ def get_device():
     else:
         device = torch.device("cpu")
     return device
+
+
+def _to_pil(img):
+    if not isinstance(img, Image.Image):
+        img = Image.fromarray(img)
+    return img
+
+
+def save_image(image, path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _to_pil(image).save(str(path), quality=100)
 
 
 def get_elapsed_time(start_time):

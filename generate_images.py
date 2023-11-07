@@ -9,8 +9,7 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 
-from utils import load_config, get_device, get_noise, extract, image_to_grid
-from ddpm import DDPM
+from utils import load_config, get_device, get_noise, extract, image_to_grid, save_image
 from train import get_ddpm_from_checkpoint
 
 
@@ -19,8 +18,8 @@ def get_args():
 
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
-    # parser.add_argument("--n_timesteps", type=int, required=True)
-    parser.add_argument("--gif_path", type=str, required=True)
+    parser.add_argument("--img_size", type=int, required=False, default=32)
+    parser.add_argument("--save_path", type=str, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
@@ -28,17 +27,16 @@ def get_args():
 
 
 @torch.no_grad()
-def generate_gif(ddpm, batch_size, n_channels, img_size, n_frames, gif_path, device):
-# def generate_gif(ddpm, batch_size, n_channels, img_size, gif_path, device):
+def generate_image(ddpm, batch_size, n_channels, img_size, n_frames, save_path, device):
     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint16")
 
     ddpm.eval()
+    gif_path = Path(save_path).with_suffix(".gif")
     with imageio.get_writer(gif_path, mode="I") as writer:
         # Sample pure noise from a Gaussian distribution.
         # "$x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
         x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
         for idx, t in enumerate(tqdm(range(ddpm.n_timesteps - 1, -1, -1))):
-            # Estimate noise to be removed.
             batched_t = torch.full(
                 size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
             )
@@ -68,8 +66,8 @@ def generate_gif(ddpm, batch_size, n_channels, img_size, n_frames, gif_path, dev
             if idx == ddpm.n_timesteps - 1:
                 for _ in range(100):
                     writer.append_data(frame)
-    return x
 
+                save_image(grid, path=save_path)
 
 if __name__ == "__main__":
     CONFIG = load_config(Path(__file__).parent/"config.yaml")
@@ -79,14 +77,11 @@ if __name__ == "__main__":
     DEVICE = get_device()
 
     ddpm, _ = get_ddpm_from_checkpoint(ckpt_path=args.ckpt_path, device=DEVICE)
-    generated = generate_gif(
+    generate_image(
         ddpm=ddpm,
-        img_size=CONFIG["IMG_SIZE"],
+        img_size=args.img_size,
         n_channels=CONFIG["N_CHANNELS"],
         batch_size=args.batch_size,
-        n_frames=100,
-        gif_path=args.gif_path,
+        save_path=args.save_path,
         device=DEVICE,
     )
-    grid = image_to_grid(generated, n_cols=int(args.batch_size ** 0.5))
-    grid.show()
