@@ -149,7 +149,9 @@ if __name__ == "__main__":
 
     if wandb.run.resumed:
         # state_dict = torch.load(str(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
-        state_dict = torch.load(wandb.restore(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
+        state_dict = torch.load(
+            str(wandb.restore(CONFIG["CKPT_TAR_PATH"])), map_location=CONFIG["DEVICE"],
+        )
         ddpm.load_state_dict(state_dict["ddpm"])
         optim.load_state_dict(state_dict["optimizer"])
         scaler.load_state_dict(state_dict["scaler"])

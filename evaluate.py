@@ -3,6 +3,7 @@
 
 import argparse
 
+from utils import get_config
 from inceptionv3 import InceptionV3
 
 
@@ -23,8 +24,8 @@ def _get_args():
 
 
 if __name__ == "__main__":
-args = _get_args()
+    args = _get_args()
     CONFIG = get_config(args)
 
-model = InceptionV3().to(device)
-model.eval()
+    model = InceptionV3().to(CONFIG["DEVICE"])
+    model.eval()
