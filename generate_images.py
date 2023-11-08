@@ -9,7 +9,15 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 
-from utils import load_config, get_device, get_noise, extract, image_to_grid, save_image
+from utils import (
+    get_config,
+    load_config,
+    get_device,
+    get_noise,
+    extract,
+    image_to_grid,
+    save_image,
+)
 from ddpm import DDPM
 
 
@@ -28,15 +36,18 @@ def get_args():
 
 def get_ddpm_from_checkpoint(ckpt_path, device):
     state_dict = torch.load(str(ckpt_path), map_location=device)
+    # ddpm = DDPM(
+    #     n_timesteps=state_dict["n_timesteps"],
+    #     init_beta=state_dict["initial_beta"],
+    #     fin_beta=state_dict["final_beta"],
+    # ).to(device)
     ddpm = DDPM(
-        n_timesteps=state_dict["n_timesteps"],
-        init_beta=state_dict["initial_beta"],
-        fin_beta=state_dict["final_beta"],
-    ).to(device)
-    ddpm.load_state_dict(state_dict["model"])
-
-    epoch = state_dict["epoch"]
-    return ddpm, epoch
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        init_beta=CONFIG["INIT_BETA"],
+        fin_beta=CONFIG["FIN_BETA"],
+    ).to(CONFIG["DEVICE"])
+    ddpm.load_state_dict(state_dict["ddpm"])
+    return ddpm
 
 
 def _get_frame(x):
@@ -84,23 +95,20 @@ def generate_images(
                 writer.append_data(frame)
 
             if t == 0:
-                grid = image_to_grid(x, n_cols=int(args.batch_size ** 0.5))
+                grid = image_to_grid(x, n_cols=int(CONFIG["BATCH_SIZE"] ** 0.5))
                 save_image(grid, path=save_path)
 
 
 if __name__ == "__main__":
-    CONFIG = load_config(Path(__file__).parent/"config.yaml")
-
     args = get_args()
+    CONFIG = get_config(args)
 
-    DEVICE = get_device()
-
-    ddpm, _ = get_ddpm_from_checkpoint(ckpt_path=args.ckpt_path, device=DEVICE)
+    ddpm = get_ddpm_from_checkpoint(ckpt_path=CONFIG["CKPT_PATH"], device=CONFIG["DEVICE"])
     generate_images(
         ddpm=ddpm,
-        img_size=args.img_size,
+        img_size=CONFIG["IMG_SIZE"],
         n_channels=CONFIG["N_CHANNELS"],
-        batch_size=args.batch_size,
-        save_path=args.save_path,
-        device=DEVICE,
+        batch_size=CONFIG["BATCH_SIZE"],
+        save_path=CONFIG["SAVE_PATH"],
+        device=CONFIG["DEVICE"],
     )

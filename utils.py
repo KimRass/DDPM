@@ -16,6 +16,24 @@ import numpy as np
 import os
 
 
+def _args_to_config(args, config):
+    for k, v in vars(args).items():
+        config[k.upper()] = v
+    return config
+
+
+def get_config(args):
+    config = load_config(Path(__file__).parent/"config.yaml")
+    _args_to_config(args=args, config=config)
+
+    config["PARENT_DIR"] = Path(__file__).resolve().parent
+    config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"
+    config["CKPT_TAR_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
+
+    config["DEVICE"] = get_device()
+    return config
+
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
