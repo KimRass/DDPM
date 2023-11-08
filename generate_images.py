@@ -11,8 +11,6 @@ from tqdm import tqdm
 
 from utils import (
     get_config,
-    load_config,
-    get_device,
     get_noise,
     extract,
     image_to_grid,
@@ -36,11 +34,6 @@ def get_args():
 
 def get_ddpm_from_checkpoint(ckpt_path, device):
     state_dict = torch.load(str(ckpt_path), map_location=device)
-    # ddpm = DDPM(
-    #     n_timesteps=state_dict["n_timesteps"],
-    #     init_beta=state_dict["initial_beta"],
-    #     fin_beta=state_dict["final_beta"],
-    # ).to(device)
     ddpm = DDPM(
         n_timesteps=CONFIG["N_TIMESTEPS"],
         init_beta=CONFIG["INIT_BETA"],
