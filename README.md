@@ -44,15 +44,6 @@ $$\mu_{\theta}(x_{t}, t) = \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{
 - The neural network is trained to predict this noise based on the corrupted image $x_{t}$ (i.e. noise applied on $x_{0}$ based on known schedule $\beta_{t}$).
 $$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$$
 $$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \vert x_{t})$$ -->
-<!-- ## Kullback–Leibler Divergence (KL Divergence)
-- Also called 'relative entropy' and 'I-divergence'.
-$$D_{KL}(P || Q)$$
-- A measure of how one probability distribution $P$ is different from a second, reference probability distribution $Q$.
-- For discrete probability distributions $P$ and $Q$ defined on the same sample space, $\mathcal{X}$, the relative entropy from $Q$ to $P$ is defined to be
-$$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\bigg)$$
-- For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
-$$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
-- where $p$ and $q$ denote the probability densities of $P$ and $Q$. -->
 ## Pre-trained Models
 - [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
@@ -82,6 +73,16 @@ $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\big
         --batch_size=36\
         --save_path="generated_images/4.jpg"
     ```
+## Impotant Concepts
+### Kullback–Leibler Divergence (KL Divergence)
+- Also called 'relative entropy' and 'I-divergence'.
+$$D_{KL}(P || Q)$$
+- A measure of how one probability distribution $P$ is different from a second, reference probability distribution $Q$.
+- For discrete probability distributions $P$ and $Q$ defined on the same sample space, $\mathcal{X}$, the relative entropy from $Q$ to $P$ is defined to be
+$$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\bigg)$$
+- For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
+$$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
+- where $p$ and $q$ denote the probability densities of $P$ and $Q$.
 ## References
 - https://huggingface.co/blog/annotated-diffusion
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1

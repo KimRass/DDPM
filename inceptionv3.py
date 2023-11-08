@@ -4,15 +4,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-
 from torchvision.models import inception_v3
 from torchvision.models.inception import InceptionA, InceptionC, InceptionE
-
 try:
     from torchvision.models.utils import load_state_dict_from_url
 except ModuleNotFoundError:
     from torch.utils.model_zoo import load_url as load_state_dict_from_url
+import ssl
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 class InceptionV3(nn.Module):
@@ -104,13 +104,6 @@ class InceptionV3(nn.Module):
             ]
             self.blocks.append(nn.Sequential(*block3))
 
-        if self.last_needed_block >= 4:
-            self.fc = inception.fc
-            self.fc.bias = None
-
-        # for param in self.parameters():
-        #     param.requires_grad = requires_grad
-
     def forward(self, x):
         """Get Inception feature maps
 
@@ -125,7 +118,7 @@ class InceptionV3(nn.Module):
         List of torch.autograd.Variable, corresponding to the selected output
         block, sorted ascending by index
         """
-        out = list()
+        # out = list()
         if self.resize_input:
             x = F.interpolate(x, size=(299, 299), mode="bilinear", align_corners=False)
 
@@ -135,18 +128,12 @@ class InceptionV3(nn.Module):
         for idx, block in enumerate(self.blocks):
             x = block(x)
             if idx in self.output_blocks:
-                out.append(x)
+                # out.append(x)
+                return x
 
-            if idx == self.last_needed_block:
-                break
-
-        if self.last_needed_block >= 4:
-            x = F.dropout(x, training=self.training)
-            x = torch.flatten(x, 1) # (b, 2048, 1, 1)
-            x = self.fc(x) # (b, 2048)
-            x = F.softmax(x, dim=1)
-            out.append(x)
-        return out
+        #     if idx == self.last_needed_block:
+        #         break
+        # return out
 
 
 def fid_inception_v3():
@@ -280,3 +267,10 @@ class FIDInceptionE_2(InceptionE):
 
         outputs = [branch1x1, branch3x3, branch3x3dbl, branch_pool]
         return torch.cat(outputs, 1)
+
+
+if __name__ == "__main__":
+    model = InceptionV3()
+    x = torch.randn(4, 3, 256, 256)
+    out = model(x)
+    out.shape # `(4, 2048, 1, 1)`

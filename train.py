@@ -41,6 +41,8 @@ def _get_args():
 
 
 def init_wandb(run_id, img_size):
+    if run_id is None:
+        run_id = wandb.util.generate_id()
     wandb.init(project="DDPM", resume="allow", id=run_id)
     wandb.config.update({"IMG_SIZE": img_size})
     print(wandb.config)
