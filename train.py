@@ -27,13 +27,13 @@ from ddpm import DDPM
 def _get_args():
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("--run_id", type=str, required=True)
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
-    parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()
@@ -41,7 +41,7 @@ def _get_args():
 
 
 def init_wandb(run_id, img_size):
-    wandb.init(project="DDPM", resume=run_id)
+    wandb.init(project="DDPM", resume="allow", sync_tensorboard=True, id=run_id)
     wandb.config.update(
         {
             "IMG_SIZE": img_size,

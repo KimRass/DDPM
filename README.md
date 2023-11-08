@@ -68,7 +68,7 @@ $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\big
     BATCH_SIZE = 64
     LR = 0.00005
     ```
-## Generated Image Sample
+## Generated Image Samples
 - Resolution of 32×32
     - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
