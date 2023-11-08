@@ -41,13 +41,8 @@ def _get_args():
 
 
 def init_wandb(run_id, img_size):
-    wandb.init(project="DDPM", resume="allow", sync_tensorboard=True, id=run_id)
-    wandb.config.update(
-        {
-            "IMG_SIZE": img_size,
-        },
-        allow_val_change=True,
-    )
+    wandb.init(project="DDPM", resume="allow", id=run_id)
+    wandb.config.update({"IMG_SIZE": img_size})
     print(wandb.config)
 
 
@@ -84,18 +79,37 @@ def train_single_step(x0, ddpm, optim, scaler, crit, config):
 
 
 # def save_checkpoint(epoch, ddpm, scaler, optim, loss, save_path):
-def save_checkpoint(ddpm, save_path):
+# # def save_checkpoint(ddpm, save_path):
+#     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+#     state_dict = {
+#         "epoch": epoch,
+#         "ddpm": modify_state_dict(ddpm.state_dict()),
+#         "scaler": scaler.state_dict(),
+#         "optimizer": optim.state_dict(),
+#         "loss": loss,
+#     }
+#     torch.save(state_dict, str(save_path))
+#     # torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
+#     wandb.save(str(save_path), base_path=Path(save_path).parent)
+
+
+def save_wandb_checkpoint(epoch, ddpm, scaler, optim, loss, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    # state_dict = {
-    #     "epoch": epoch,
-    #     "ddpm": modify_state_dict(ddpm.state_dict()),
-    #     "scaler": scaler.state_dict(),
-    #     "optimizer": optim.state_dict(),
-    #     "loss": loss,
-    # }
-    # torch.save(state_dict, str(save_path))
-    torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
+    state_dict = {
+        "epoch": epoch,
+        "ddpm": modify_state_dict(ddpm.state_dict()),
+        "scaler": scaler.state_dict(),
+        "optimizer": optim.state_dict(),
+        "loss": loss,
+    }
+    torch.save(state_dict, str(save_path))
+    # torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
     wandb.save(str(save_path), base_path=Path(save_path).parent)
+
+
+def save_ddpm(ddpm, save_path):
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
 
 
 def get_tain_dl(config):
@@ -134,7 +148,8 @@ if __name__ == "__main__":
     crit = nn.MSELoss(reduction="sum")
 
     if wandb.run.resumed:
-        state_dict = torch.load(str(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
+        # state_dict = torch.load(str(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
+        state_dict = torch.load(wandb.restore(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
         ddpm.load_state_dict(state_dict["ddpm"])
         optim.load_state_dict(state_dict["optimizer"])
         scaler.load_state_dict(state_dict["scaler"])
@@ -160,7 +175,7 @@ if __name__ == "__main__":
 
         msg = f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
         msg += f"[ {get_elapsed_time(start_time)} ]"
-        msg += f"[ Loss: {accum_loss:.7f} ]"
+        msg += f"[ Loss: {accum_loss:.5f} ]"
 
         wandb.log(
             {
@@ -171,14 +186,19 @@ if __name__ == "__main__":
 
         if accum_loss < min_loss:
             filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
-            save_checkpoint(
-                # epoch=epoch,
+            save_ddpm(
                 ddpm=ddpm,
-                # scaler=scaler,
-                # optim=optim,
-                # loss=accum_loss,
                 save_path=CONFIG["CKPTS_DIR"]/filename,
             )
             msg += f" (Saved checkpoint.)"
             min_loss = accum_loss
         print(msg)
+
+        save_wandb_checkpoint(
+            epoch=epoch,
+            ddpm=ddpm,
+            scaler=scaler,
+            optim=optim,
+            loss=accum_loss,
+            save_path=CONFIG["CKPT_TAR_PATH"],
+        )
