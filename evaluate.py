@@ -70,14 +70,15 @@ def generate_image(ddpm, batch_size, n_channels, img_size, device):
 
 
 class Evaluator(object):
-    def __init__(self, n_samples, n_cpus, dl):
+    def __init__(self, n_samples, n_cpus, dl, device):
 
         self.n_samples = n_samples
         self.batch_size = dl.batch_size
         self.n_cpus = n_cpus
         self.dl = dl
+        self.device = device
 
-        self.inceptionv3 = InceptionV3()
+        self.inceptionv3 = InceptionV3().to(device)
         self.real_embed = self.get_real_embedding()
 
     def get_real_embedding(self):
@@ -85,7 +86,7 @@ class Evaluator(object):
         di = iter(self.dl)
         # for _ in range(math.ceil(self.n_samples // self.batch_size)):
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
-            x0 = next(di)
+            x0 = next(di).to(self.device)
             _, self.n_channels, self.img_size, _ = x0.shape
             embed = self.inceptionv3(x0)
             embeds.append(embed)
@@ -101,7 +102,7 @@ class Evaluator(object):
                 n_channels=self.n_channels,
                 img_size=self.img_size,
                 device=device,
-            )
+            ).to(self.device)
             embed = self.inceptionv3(x0)
             embeds.append(embed)
         synth_embed = torch.cat(embeds)[: self.n_samples]

@@ -154,7 +154,9 @@ if __name__ == "__main__":
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
     crit = nn.MSELoss(reduction="mean")
 
-    evaluator = Evaluator(n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl)
+    evaluator = Evaluator(
+        n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
+    )
 
     if wandb.run.resumed:
         # state_dict = torch.load(str(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
