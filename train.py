@@ -157,7 +157,7 @@ if __name__ == "__main__":
 
     inceptionv3 = InceptionV3().to(CONFIG["DEVICE"])
     for _ in tqdm(range(1000)):
-        inceptionv3(torch.randn(size=(4, 3, 4, 4)).to(CONFIG["DEVICE"]))
+        inceptionv3(torch.randn(size=(16, 3, 32, 32)).to(CONFIG["DEVICE"]))
     evaluator = Evaluator(
         n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
     )

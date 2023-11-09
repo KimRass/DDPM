@@ -90,7 +90,8 @@ class Evaluator(object):
         # for _ in range(math.ceil(self.n_samples // self.batch_size)):
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
             # _, self.n_channels, self.img_size, _ = x0.shape
-            x0 = next(di).to(self.device)
+            x0 = next(di)
+            x0 = x0.to(self.device)
             embed = self.inceptionv3(x0)
             embeds.append(embed)
         real_embed = torch.cat(embeds)[: self.n_samples]
@@ -105,7 +106,8 @@ class Evaluator(object):
                 n_channels=self.n_channels,
                 img_size=self.img_size,
                 device=device,
-            ).to(self.device)
+            )
+            x0 = x0.to(self.device)
             embed = self.inceptionv3(x0)
             embeds.append(embed)
         synth_embed = torch.cat(embeds)[: self.n_samples]
