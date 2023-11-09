@@ -11,6 +11,7 @@ from pathlib import Path
 import math
 from time import time
 import wandb
+from tqdm import tqdm
 
 from utils import (
     set_seed,
@@ -173,7 +174,8 @@ if __name__ == "__main__":
         best_fid = math.inf
 
     n_cols = int(CONFIG["BATCH_SIZE"] ** 0.5)
-    for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
+    # for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
+    for epoch in tqdm(range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1)):
         accum_loss = 0
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
