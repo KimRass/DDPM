@@ -14,17 +14,20 @@ from collections import OrderedDict
 import random
 import numpy as np
 import os
+from copy import deepcopy
 
 
 def _args_to_config(args, config):
+    copied = deepcopy(config)
     for k, v in vars(args).items():
-        config[k.upper()] = v
-    return config
+        copied[k.upper()] = v
+    return copied
 
 
-def get_config(args):
+def get_config(args=None):
     config = load_config(Path(__file__).parent/"config.yaml")
-    _args_to_config(args=args, config=config)
+    if args is not None:
+        config = _args_to_config(args=args, config=config)
 
     config["PARENT_DIR"] = Path(__file__).resolve().parent
     config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"

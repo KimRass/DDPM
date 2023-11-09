@@ -1,119 +1,115 @@
 # References:
     # https://wandb.ai/wandb_fc/korean/reports/-Frechet-Inception-distance-FID-GANs---Vmlldzo0MzQ3Mzc
+    # https://github.com/w86763777/pytorch-ddpm/blob/master/score/fid.py
 
 import torch
 import argparse
 import numpy as np
 import scipy
+from tqdm import tqdm
 
-from utils import get_config
+from utils import get_config, get_noise, extract
 from inceptionv3 import InceptionV3
+from train import get_tain_dl
 
 
 def _get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", type=str, required=True)
-    parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--batch_size", type=int, required=True)
-    parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
-    parser.add_argument("--run_id", type=str, required=False)
-    parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()
     return args
 
 
-# def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6, use_torch=False):
-def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6, use_torch=True):
-    """
-    mu1: (2048)
-    sigma1: (2048, 2048)
-    """
-
-    if use_torch:
-        assert mu1.shape == mu2.shape, \
-            'Training and test mean vectors have different lengths'
-        assert sigma1.shape == sigma2.shape, \
-            'Training and test covariances have different dimensions'
-
-        mu1 = torch.randn((2048,))
-        mu2 = torch.randn((2048,))
-        out = ((mu1 - mu2) ** 2).sum()
-
-        sigma1 = torch.randn((2048, 2048))
-        sigma2 = torch.randn((2048, 2048))
-
-        (sigma1 * sigma2)
-
-        sigma1 = np.random.rand(2048, 2048)
-        sigma2 = np.random.rand(2048, 2048)
-        a = scipy.linalg.sqrtm(sigma1 @ sigma2)
-        sigma1 @ sigma2
-        a
-        
-        a = np.cov(embed1, rowvar=False)
-        b = torch.cov(torch.from_numpy(embed1).T)
-        a.shape, b.shape
-        a
-        b
-        
-        embed2 = np.random.rand(4, 2048)
+def get_matrix_sqrt(x):
+    sqrtm = scipy.linalg.sqrtm(np.array(x, dtype="float64"))
+    if np.iscomplexobj(sqrtm):
+       sqrtm = sqrtm.real
+    return torch.from_numpy(sqrtm)
 
 
+def get_mean_and_cov(embed):
+    mu = embed.mean(dim=0).detach().cpu()
+    sigma = torch.cov(embed.squeeze().T).detach().cpu()
+    return mu, sigma
 
-        diff = mu1 - mu2
-        # Run 50 itrs of newton-schulz to get the matrix sqrt of
-        # sigma1 dot sigma2
-        covmean = sqrt_newton_schulz(sigma1.mm(sigma2).unsqueeze(0), 50)
-        if torch.any(torch.isnan(covmean)):
-            return float('nan')
-        covmean = covmean.squeeze()
-        out = (diff.dot(diff) + torch.trace(sigma1) + torch.trace(sigma2) - 2 * torch.trace(covmean)).cpu().item()
-    # else:
-    #     mu1 = np.atleast_1d(mu1)
-    #     mu2 = np.atleast_1d(mu2)
 
-    #     sigma1 = np.atleast_2d(sigma1)
-    #     sigma2 = np.atleast_2d(sigma2)
+def get_frechet_distance(mu1, mu2, sigma1, sigma2):
+    cov_product = get_matrix_sqrt(sigma1 @ sigma2)
+    fd = ((mu1 - mu2) ** 2).sum() + torch.trace(sigma1 + sigma2 - 2 * cov_product)
+    return fd.item()
 
-    #     assert mu1.shape == mu2.shape, \
-    #         'Training and test mean vectors have different lengths'
-    #     assert sigma1.shape == sigma2.shape, \
-    #         'Training and test covariances have different dimensions'
 
-    #     diff = mu1 - mu2
+def get_fid(embed1, embed2):
+    mu1, sigma1 = get_mean_and_cov(embed1)
+    mu2, sigma2 = get_mean_and_cov(embed2)
+    fd = get_frechet_distance(mu1=mu1, mu2=mu2, sigma1=sigma1, sigma2=sigma2)
+    return fd
 
-    #     # Product might be almost singular
-    #     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
-    #     if not np.isfinite(covmean).all():
-    #         msg = ('fid calculation produces singular product; '
-    #                'adding %s to diagonal of cov estimates') % eps
-    #         print(msg)
-    #         offset = np.eye(sigma1.shape[0]) * eps
-    #         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
 
-    #     # Numerical error might give slight imaginary component
-    #     if np.iscomplexobj(covmean):
-    #         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
-    #             m = np.max(np.abs(covmean.imag))
-    #             raise ValueError('Imaginary component {}'.format(m))
-    #         covmean = covmean.real
+# def get_real_embedding(dl, n):
+def get_real_embedding(inceptionv3, dl):
+    embeds = list()
+    # cnt = 0
+    for x0 in tqdm(dl):
+        embed = inceptionv3(x0)
+        embeds.append(embed)
+    # return torch.cat(embeds)[: n]
+    return torch.cat(embeds)
 
-    #     tr_covmean = np.trace(covmean)
 
-    #     out = (diff.dot(diff) +
-    #            np.trace(sigma1) +
-    #            np.trace(sigma2) -
-    #            2 * tr_covmean)
-    return out
+@torch.no_grad()
+def sample_image(ddpm, batch_size, n_channels, img_size, device):
+    ddpm.eval()
+    # "1: $x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$" ("Algorithm 2")
+    x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+    for t in range(ddpm.n_timesteps - 1, -1, -1):
+        batched_t = torch.full(
+            size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
+        )
+        eps_theta = ddpm.predict_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
+
+        beta_t = extract(ddpm.beta.to(device), t=t)
+        alpha_t = extract(ddpm.alpha.to(device), t=t)
+        alpha_bar_t = extract(ddpm.alpha_bar.to(device), t=t)
+
+        # "$$\mu_{\theta}(x_{t}, t) =
+        # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
+        x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+
+        if t > 0:
+            eps = get_noise(
+                batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
+            ) # "3: $z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$" ("Algorithm 2")
+            x += (beta_t ** 0.5) * eps
+    return x
+
+
+def get_synthesized_embedding(n, ddpm, batch_size, n_channels, img_size, device):
+    embeds = list()
+    for _ in range(n // batch_size + 1):
+        x0 = sample_image(
+            ddpm=ddpm, batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
+        )
+        embed = inceptionv3(x0)
+        embeds.append(embed)
+    return torch.cat(embeds)[: n]
+
+
+def evaluate():
+    real_embed = 
 
 
 if __name__ == "__main__":
     args = _get_args()
     CONFIG = get_config(args)
 
-    model = InceptionV3().to(CONFIG["DEVICE"])
-    model.eval()
+    inceptionv3 = InceptionV3()
+
+    train_dl = get_tain_dl(CONFIG)
+    real_embed = get_real_embedding(inceptionv3=inceptionv3, dl=train_dl, n=100)
+    print(real_embed.shape)

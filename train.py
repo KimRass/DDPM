@@ -22,6 +22,7 @@ from utils import (
 )
 from celeba import CelebADataset
 from ddpm import DDPM
+from evaluate import get_real_embedding, get_synthesized_embedding
 
 
 def _get_args():
@@ -116,7 +117,7 @@ def save_ddpm(ddpm, save_path):
 
 def get_tain_dl(config):
     train_ds = CelebADataset(
-        data_dir=config["DATA_DIR"], img_size=config["IMG_SIZE"], mean=config["MEAN"], std=config["STD"],
+        data_dir=config["DATA_DIR"], img_size=config["IMG_SIZE"],
     )
     train_dl = DataLoader(
         train_ds,
@@ -147,7 +148,7 @@ if __name__ == "__main__":
         ddpm = torch.compile(ddpm)
     optim = Adam(ddpm.parameters(), lr=CONFIG["LR"])
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
-    crit = nn.MSELoss(reduction="sum")
+    crit = nn.MSELoss(reduction="mean")
 
     if wandb.run.resumed:
         # state_dict = torch.load(str(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
@@ -175,7 +176,6 @@ if __name__ == "__main__":
                 x0=x0, ddpm=ddpm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
             )
             accum_loss += loss.item()
-        accum_loss /= CONFIG["BATCH_SIZE"]
 
         msg = f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
         msg += f"[ {get_elapsed_time(start_time)} ]"

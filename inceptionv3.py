@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import inception_v3
+from torchvision.models import inception_v3, Inception_V3_Weights
 from torchvision.models.inception import InceptionA, InceptionC, InceptionE
 try:
     from torchvision.models.utils import load_state_dict_from_url
@@ -13,127 +13,6 @@ except ModuleNotFoundError:
 import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
-
-
-class InceptionV3(nn.Module):
-    """Pretrained InceptionV3 network returning feature maps"""
-    def __init__(
-        self,
-        output_blocks=[3], # Corresponds to output of final average pooling.
-        resize_input=True,
-        normalize_input=True,
-        use_fid_inception=True,
-    ):
-        """Build pretrained InceptionV3
-
-        Parameters
-        ----------
-        output_blocks : list of int
-            Indices of blocks to return features of. Possible values are:
-                3: corresponds to output of final average pooling
-        resize_input : bool
-            If true, bilinearly resizes input to width and height 299 before
-            feeding input to model. As the network without fully connected
-            layers is fully convolutional, it should be able to handle inputs
-            of arbitrary size, so resizing might not be strictly needed
-        normalize_input : bool
-            If true, scales the input from range (0, 1) to the range the
-            pretrained Inception network expects, namely (-1, 1)
-        use_fid_inception : bool
-            If true, uses the pretrained Inception model used in Tensorflow"s
-            FID implementation. If false, uses the pretrained Inception model
-            available in torchvision. The FID Inception model has different
-            weights and a slightly different structure from torchvision"s
-            Inception model. If you want to compute FID scores, you are
-            strongly advised to set this parameter to true to get comparable
-            results.
-        """
-        super().__init__()
-
-        self.resize_input = resize_input
-        self.normalize_input = normalize_input
-        self.output_blocks = sorted(output_blocks)
-        self.last_needed_block = max(output_blocks)
-
-        self.blocks = nn.ModuleList()
-
-        if use_fid_inception:
-            inception = fid_inception_v3()
-        else:
-            inception = inception_v3(pretrained=True)
-
-        # Block 0: input to maxpool1
-        block0 = [
-            inception.Conv2d_1a_3x3,
-            inception.Conv2d_2a_3x3,
-            inception.Conv2d_2b_3x3,
-            nn.MaxPool2d(kernel_size=3, stride=2)
-        ]
-        self.blocks.append(nn.Sequential(*block0))
-
-        # Block 1: maxpool1 to maxpool2
-        if self.last_needed_block >= 1:
-            block1 = [
-                inception.Conv2d_3b_1x1,
-                inception.Conv2d_4a_3x3,
-                nn.MaxPool2d(kernel_size=3, stride=2)
-            ]
-            self.blocks.append(nn.Sequential(*block1))
-
-        # Block 2: maxpool2 to aux classifier
-        if self.last_needed_block >= 2:
-            block2 = [
-                inception.Mixed_5b,
-                inception.Mixed_5c,
-                inception.Mixed_5d,
-                inception.Mixed_6a,
-                inception.Mixed_6b,
-                inception.Mixed_6c,
-                inception.Mixed_6d,
-                inception.Mixed_6e,
-            ]
-            self.blocks.append(nn.Sequential(*block2))
-
-        # Block 3: aux classifier to final avgpool
-        if self.last_needed_block >= 3:
-            block3 = [
-                inception.Mixed_7a,
-                inception.Mixed_7b,
-                inception.Mixed_7c,
-                nn.AdaptiveAvgPool2d(output_size=(1, 1))
-            ]
-            self.blocks.append(nn.Sequential(*block3))
-
-    def forward(self, x):
-        """Get Inception feature maps
-
-        Parameters
-        ----------
-        x : torch.autograd.Variable
-            Input tensor of shape Bx3xHxW. Values are expected to be in
-            range (0, 1)
-
-        Returns
-        -------
-        List of torch.autograd.Variable, corresponding to the selected output
-        block, sorted ascending by index
-        """
-        # out = list()
-        if self.resize_input:
-            x = F.interpolate(x, size=(299, 299), mode="bilinear", align_corners=False)
-
-        if self.normalize_input:
-            x = 2 * x - 1  # Scale from range (0, 1) to range (-1, 1)
-
-        for idx, block in enumerate(self.blocks):
-            x = block(x)
-            if idx in self.output_blocks:
-                # out.append(x)
-                return x
-
-        #     if idx == self.last_needed_block:
-        #         break
-        # return out
 
 
 def fid_inception_v3():
@@ -148,7 +27,7 @@ def fid_inception_v3():
     This method first constructs torchvision"s Inception and then patches the
     necessary parts that are different in the FID Inception model.
     """
-    inception = inception_v3(num_classes=1008, aux_logits=False, pretrained=False)
+    inception = inception_v3(num_classes=1008, aux_logits=False, init_weights=True)
     inception.Mixed_5b = FIDInceptionA(192, pool_features=32)
     inception.Mixed_5c = FIDInceptionA(256, pool_features=64)
     inception.Mixed_5d = FIDInceptionA(288, pool_features=64)
@@ -267,6 +146,127 @@ class FIDInceptionE_2(InceptionE):
 
         outputs = [branch1x1, branch3x3, branch3x3dbl, branch_pool]
         return torch.cat(outputs, 1)
+
+
+class InceptionV3(nn.Module):
+    """Pretrained InceptionV3 network returning feature maps"""
+    def __init__(
+        self,
+        output_blocks=[3], # Corresponds to output of final average pooling.
+        resize_input=True,
+        normalize_input=True,
+        use_fid_inception=True,
+    ):
+        """Build pretrained InceptionV3
+
+        Parameters
+        ----------
+        output_blocks : list of int
+            Indices of blocks to return features of. Possible values are:
+                3: corresponds to output of final average pooling
+        resize_input : bool
+            If true, bilinearly resizes input to width and height 299 before
+            feeding input to model. As the network without fully connected
+            layers is fully convolutional, it should be able to handle inputs
+            of arbitrary size, so resizing might not be strictly needed
+        normalize_input : bool
+            If true, scales the input from range (0, 1) to the range the
+            pretrained Inception network expects, namely (-1, 1)
+        use_fid_inception : bool
+            If true, uses the pretrained Inception model used in Tensorflow"s
+            FID implementation. If false, uses the pretrained Inception model
+            available in torchvision. The FID Inception model has different
+            weights and a slightly different structure from torchvision"s
+            Inception model. If you want to compute FID scores, you are
+            strongly advised to set this parameter to true to get comparable
+            results.
+        """
+        super().__init__()
+
+        self.resize_input = resize_input
+        self.normalize_input = normalize_input
+        self.output_blocks = sorted(output_blocks)
+        self.last_needed_block = max(output_blocks)
+
+        self.blocks = nn.ModuleList()
+
+        if use_fid_inception:
+            inception = fid_inception_v3()
+        else:
+            inception = inception_v3(weights=Inception_V3_Weights.DEFAULT)
+
+        # Block 0: input to maxpool1
+        block0 = [
+            inception.Conv2d_1a_3x3,
+            inception.Conv2d_2a_3x3,
+            inception.Conv2d_2b_3x3,
+            nn.MaxPool2d(kernel_size=3, stride=2)
+        ]
+        self.blocks.append(nn.Sequential(*block0))
+
+        # Block 1: maxpool1 to maxpool2
+        if self.last_needed_block >= 1:
+            block1 = [
+                inception.Conv2d_3b_1x1,
+                inception.Conv2d_4a_3x3,
+                nn.MaxPool2d(kernel_size=3, stride=2)
+            ]
+            self.blocks.append(nn.Sequential(*block1))
+
+        # Block 2: maxpool2 to aux classifier
+        if self.last_needed_block >= 2:
+            block2 = [
+                inception.Mixed_5b,
+                inception.Mixed_5c,
+                inception.Mixed_5d,
+                inception.Mixed_6a,
+                inception.Mixed_6b,
+                inception.Mixed_6c,
+                inception.Mixed_6d,
+                inception.Mixed_6e,
+            ]
+            self.blocks.append(nn.Sequential(*block2))
+
+        # Block 3: aux classifier to final avgpool
+        if self.last_needed_block >= 3:
+            block3 = [
+                inception.Mixed_7a,
+                inception.Mixed_7b,
+                inception.Mixed_7c,
+                nn.AdaptiveAvgPool2d(output_size=(1, 1))
+            ]
+            self.blocks.append(nn.Sequential(*block3))
+
+    def forward(self, x):
+        """Get Inception feature maps
+
+        Parameters
+        ----------
+        x : torch.autograd.Variable
+            Input tensor of shape Bx3xHxW. Values are expected to be in
+            range (0, 1)
+
+        Returns
+        -------
+        List of torch.autograd.Variable, corresponding to the selected output
+        block, sorted ascending by index
+        """
+        # out = list()
+        if self.resize_input:
+            x = F.interpolate(x, size=(299, 299), mode="bilinear", align_corners=False)
+
+        if self.normalize_input:
+            x = 2 * x - 1  # Scale from range (0, 1) to range (-1, 1)
+
+        for idx, block in enumerate(self.blocks):
+            x = block(x)
+            if idx in self.output_blocks:
+                # out.append(x)
+                return x
+
+        #     if idx == self.last_needed_block:
+        #         break
+        # return out
 
 
 if __name__ == "__main__":

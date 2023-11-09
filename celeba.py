@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 class CelebADataset(Dataset):
-    def __init__(self, data_dir, img_size, mean, std):
+    def __init__(self, data_dir, img_size):
         super().__init__()
 
         self.img_paths = list(Path(data_dir).glob("**/*.jpg"))
@@ -20,9 +20,7 @@ class CelebADataset(Dataset):
             # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
             T.RandomHorizontalFlip(0.5),
             T.ToTensor(),
-            # "No pre-processing was applied to training images besides scaling to the range of the tanh
-            # activation function $[-1, 1]$."
-            T.Normalize(mean, std),
+            T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
         ])
 
     def __len__(self):
@@ -34,7 +32,7 @@ class CelebADataset(Dataset):
         return image
 
 
-def get_celeba_dataloader(data_dir, img_size, mean, std, batch_size, n_workers):
-    ds = CelebADataset(data_dir=data_dir, img_size=img_size, mean=mean, std=std)
+def get_celeba_dataloader(data_dir, img_size, batch_size, n_workers):
+    ds = CelebADataset(data_dir=data_dir, img_size=img_size)
     dl = DataLoader(ds, batch_size=batch_size, shuffle=True, num_workers=n_workers, drop_last=True)
     return dl
