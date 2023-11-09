@@ -28,7 +28,7 @@ from evaluate import Evaluator
 def _get_args():
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument("--run_id", type=str, required=True)
+    parser.add_argument("--run_id", type=str, required=True)
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
