@@ -81,14 +81,16 @@ class Evaluator(object):
         self.inceptionv3 = InceptionV3().to(device)
         self.real_embed = self.get_real_embedding()
 
+        self.n_channels = 3
+        self.img_size = 4
+
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.dl)
         # for _ in range(math.ceil(self.n_samples // self.batch_size)):
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
+            # _, self.n_channels, self.img_size, _ = x0.shape
             x0 = next(di).to(self.device)
-            _, self.n_channels, self.img_size, _ = x0.shape
-            print(x0.shape)
             embed = self.inceptionv3(x0)
             embeds.append(embed)
         real_embed = torch.cat(embeds)[: self.n_samples]
