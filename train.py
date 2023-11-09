@@ -24,6 +24,7 @@ from utils import (
 from celeba import CelebADataset
 from ddpm import DDPM
 from evaluate import Evaluator
+from inceptionv3 import InceptionV3
 
 
 def _get_args():
@@ -154,6 +155,9 @@ if __name__ == "__main__":
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
     crit = nn.MSELoss(reduction="mean")
 
+    inceptionv3 = InceptionV3().to(CONFIG["DEVICE"])
+    for _ in range(1000):
+        inceptionv3(torch.randn(size=(4, 3, 4, 4)))
     evaluator = Evaluator(
         n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
     )
