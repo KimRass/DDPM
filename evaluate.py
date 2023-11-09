@@ -78,8 +78,10 @@ class Evaluator(object):
         self.device = device
 
         self.inceptionv3 = InceptionV3().to(device)
+        self.inceptionv3.eval()
         self.real_embed = self.get_real_embedding()
 
+    @torch.no_grad()
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.dl)
@@ -88,10 +90,11 @@ class Evaluator(object):
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
             embed = self.inceptionv3(x0)
-            embeds.append(embed.detach())
+            embeds.append(embed)
         real_embed = torch.cat(embeds)[: self.n_samples]
         return real_embed
 
+    @torch.no_grad()
     def get_synthesized_embedding(self, ddpm, device):
         embeds = list()
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
