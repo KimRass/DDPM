@@ -84,8 +84,8 @@ class Evaluator(object):
         embeds = list()
         di = iter(self.dl)
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
-            _, self.n_channels, self.img_size, _ = x0.shape
             x0 = next(di)
+            _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
             embed = self.inceptionv3(x0)
             embeds.append(embed.detach())
