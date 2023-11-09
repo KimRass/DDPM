@@ -3,7 +3,6 @@
     # https://github.com/w86763777/pytorch-ddpm/blob/master/score/fid.py
 
 import torch
-import argparse
 import numpy as np
 import scipy
 from tqdm import tqdm
@@ -81,15 +80,11 @@ class Evaluator(object):
         self.inceptionv3 = InceptionV3().to(device)
         self.real_embed = self.get_real_embedding()
 
-        self.n_channels = 3
-        self.img_size = 4
-
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.dl)
-        # for _ in range(math.ceil(self.n_samples // self.batch_size)):
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
-            # _, self.n_channels, self.img_size, _ = x0.shape
+            _, self.n_channels, self.img_size, _ = x0.shape
             x0 = next(di)
             x0 = x0.to(self.device)
             embed = self.inceptionv3(x0)

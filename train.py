@@ -24,7 +24,6 @@ from utils import (
 from celeba import CelebADataset
 from ddpm import DDPM
 from evaluate import Evaluator
-from inceptionv3 import InceptionV3
 
 
 def _get_args():
@@ -135,7 +134,7 @@ if __name__ == "__main__":
     args = _get_args()
     CONFIG = get_config(args)
     set_seed(CONFIG["SEED"])
-    # init_wandb(run_id=CONFIG["RUN_ID"], img_size=CONFIG["IMG_SIZE"])
+    init_wandb(run_id=CONFIG["RUN_ID"], img_size=CONFIG["IMG_SIZE"])
 
     train_dl = get_tain_dl(
         data_dir=CONFIG["DATA_DIR"],
@@ -155,9 +154,6 @@ if __name__ == "__main__":
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
     crit = nn.MSELoss(reduction="mean")
 
-    # inceptionv3 = InceptionV3().to(CONFIG["DEVICE"])
-    # for _ in tqdm(range(1000)):
-    #     inceptionv3(torch.randn(size=(16, 3, 32, 32)).to(CONFIG["DEVICE"]))
     evaluator = Evaluator(
         n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
     )
@@ -201,20 +197,20 @@ if __name__ == "__main__":
         wandb.log({"Loss": accum_loss, "FID": cur_fid}, step=epoch)
 
         if cur_fid < best_fid:
-            # filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
-            # save_ddpm(
-            #     ddpm=ddpm,
-            #     save_path=CONFIG["CKPTS_DIR"]/filename,
-            # )
+            filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
+            save_ddpm(
+                ddpm=ddpm,
+                save_path=CONFIG["CKPTS_DIR"]/filename,
+            )
             msg += f" (Saved checkpoint.)"
             best_fid = cur_fid
         print(msg)
 
-        # save_wandb_checkpoint(
-        #     epoch=epoch,
-        #     ddpm=ddpm,
-        #     scaler=scaler,
-        #     optim=optim,
-        #     loss=accum_loss,
-        #     save_path=CONFIG["CKPT_TAR_PATH"],
-        # )
+        save_wandb_checkpoint(
+            epoch=epoch,
+            ddpm=ddpm,
+            scaler=scaler,
+            optim=optim,
+            loss=accum_loss,
+            save_path=CONFIG["CKPT_TAR_PATH"],
+        )
