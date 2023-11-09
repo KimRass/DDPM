@@ -93,9 +93,9 @@ class Evaluator(object):
             x0 = next(di)
             x0 = x0.to(self.device)
             embed = self.inceptionv3(x0)
-            embeds.append(embed)
-        real_embed = torch.cat(embeds)[: self.n_samples]
-        return real_embed
+        #     embeds.append(embed)
+        # real_embed = torch.cat(embeds)[: self.n_samples]
+        # return real_embed
 
     def get_synthesized_embedding(self, ddpm, device):
         embeds = list()

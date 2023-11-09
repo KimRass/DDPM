@@ -155,9 +155,9 @@ if __name__ == "__main__":
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
     crit = nn.MSELoss(reduction="mean")
 
-    inceptionv3 = InceptionV3().to(CONFIG["DEVICE"])
-    for _ in tqdm(range(1000)):
-        inceptionv3(torch.randn(size=(16, 3, 32, 32)).to(CONFIG["DEVICE"]))
+    # inceptionv3 = InceptionV3().to(CONFIG["DEVICE"])
+    # for _ in tqdm(range(1000)):
+    #     inceptionv3(torch.randn(size=(16, 3, 32, 32)).to(CONFIG["DEVICE"]))
     evaluator = Evaluator(
         n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
     )
