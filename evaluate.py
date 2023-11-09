@@ -7,22 +7,11 @@ import argparse
 import numpy as np
 import scipy
 from tqdm import tqdm
+import math
 
-from utils import get_config, get_noise, extract
+from utils import get_config, sample_noise, index_using_timestep
 from inceptionv3 import InceptionV3
-from train import get_tain_dl
-
-
-def _get_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--data_dir", type=str, required=True)
-    parser.add_argument("--img_size", type=int, required=False, default=32)
-    parser.add_argument("--batch_size", type=int, required=True)
-    parser.add_argument("--n_cpus", type=int, required=False, default=0)
-
-    args = parser.parse_args()
-    return args
+from generate_images import get_ddpm_from_checkpoint
 
 
 def get_matrix_sqrt(x):
@@ -51,65 +40,73 @@ def get_fid(embed1, embed2):
     return fd
 
 
-# def get_real_embedding(dl, n):
-def get_real_embedding(inceptionv3, dl):
-    embeds = list()
-    # cnt = 0
-    for x0 in tqdm(dl):
-        embed = inceptionv3(x0)
-        embeds.append(embed)
-    # return torch.cat(embeds)[: n]
-    return torch.cat(embeds)
-
-
 @torch.no_grad()
-def sample_image(ddpm, batch_size, n_channels, img_size, device):
+def generate_image(ddpm, batch_size, n_channels, img_size, device):
     ddpm.eval()
-    # "1: $x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$" ("Algorithm 2")
-    x = get_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-    for t in range(ddpm.n_timesteps - 1, -1, -1):
-        batched_t = torch.full(
-            size=(batch_size,), fill_value=t, dtype=torch.long, device=device,
+    # Sample pure noise from a Gaussian distribution.
+    # ["Algorithm 2"] "1: $x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
+    x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+    for timestep in range(ddpm.n_timesteps - 1, -1, -1):
+        t = torch.full(
+            size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
         )
-        eps_theta = ddpm.predict_noise(x, t=batched_t) # "$z_{\theta}(x_{t}, t)$"
+        eps_theta = ddpm.predict_noise(x, t=t) # "$z_{\theta}(x_{t}, t)$"
 
-        beta_t = extract(ddpm.beta.to(device), t=t)
-        alpha_t = extract(ddpm.alpha.to(device), t=t)
-        alpha_bar_t = extract(ddpm.alpha_bar.to(device), t=t)
+        beta_t = index_using_timestep(ddpm.beta.to(device), t=t)
+        alpha_t = index_using_timestep(ddpm.alpha.to(device), t=t)
+        alpha_bar_t = index_using_timestep(ddpm.alpha_bar.to(device), t=t)
 
+        # Partially denoise image.
         # "$$\mu_{\theta}(x_{t}, t) =
         # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
         x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
 
-        if t > 0:
-            eps = get_noise(
+        if timestep > 0:
+            eps = sample_noise(
                 batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
-            ) # "3: $z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$" ("Algorithm 2")
+            ) # ["Algorithm 2"] "3: $z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
             x += (beta_t ** 0.5) * eps
     return x
 
 
-def get_synthesized_embedding(n, ddpm, batch_size, n_channels, img_size, device):
-    embeds = list()
-    for _ in range(n // batch_size + 1):
-        x0 = sample_image(
-            ddpm=ddpm, batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
-        )
-        embed = inceptionv3(x0)
-        embeds.append(embed)
-    return torch.cat(embeds)[: n]
+class Evaluator(object):
+    def __init__(self, n_samples, n_cpus, dl):
 
+        self.n_samples = n_samples
+        self.batch_size = dl.batch_size
+        self.n_cpus = n_cpus
+        self.dl = dl
 
-def evaluate():
-    real_embed = 
+        self.inceptionv3 = InceptionV3()
+        self.real_embed = self.get_real_embedding()
 
+    def get_real_embedding(self):
+        embeds = list()
+        di = iter(self.dl)
+        for _ in range(math.ceil(self.n_samples // self.batch_size)):
+            x0 = next(di)
+            _, self.n_channels, self.img_size, _ = x0.shape
+            embed = self.inceptionv3(x0)
+            embeds.append(embed)
+        real_embed = torch.cat(embeds)[: self.n_samples]
+        return real_embed
 
-if __name__ == "__main__":
-    args = _get_args()
-    CONFIG = get_config(args)
+    def get_synthesized_embedding(self, ddpm, device):
+        embeds = list()
+        for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
+            x0 = generate_image(
+                ddpm=ddpm,
+                batch_size=self.batch_size,
+                n_channels=self.n_channels,
+                img_size=self.img_size,
+                device=device,
+            )
+            embed = self.inceptionv3(x0)
+            embeds.append(embed)
+        synth_embed = torch.cat(embeds)[: self.n_samples]
+        return synth_embed
 
-    inceptionv3 = InceptionV3()
-
-    train_dl = get_tain_dl(CONFIG)
-    real_embed = get_real_embedding(inceptionv3=inceptionv3, dl=train_dl, n=100)
-    print(real_embed.shape)
+    def evaluate(self, ddpm, device):
+        synth_embed = self.get_synthesized_embedding(ddpm=ddpm, device=device)
+        fid = get_fid(self.real_embed, synth_embed)
+        return fid

@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 
-from utils import extract, get_noise
+from utils import index_using_timestep, sample_noise
 from model import UNet
 
 
@@ -35,7 +35,7 @@ class DDPM(nn.Module):
         return torch.cumprod(alpha, dim=0)
 
     def _q(self, t): # $q(x_{t} \vert x_{0})$
-        alpha_bar_t = extract(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
+        alpha_bar_t = index_using_timestep(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
         mean = (alpha_bar_t ** 0.5) # $\sqrt{\bar{\alpha_{t}}}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         return mean, var
@@ -44,7 +44,7 @@ class DDPM(nn.Module):
         b, c, h, _ = x0.shape
         if eps is None:
             # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-            eps = get_noise(batch_size=b, n_channels=c, img_size=h, device=x0.device)
+            eps = sample_noise(batch_size=b, n_channels=c, img_size=h, device=x0.device)
         mean, var = self._q(t)
         return mean * x0 + (var ** 0.5) * eps
 
@@ -54,4 +54,14 @@ class DDPM(nn.Module):
 
     def predict_noise(self, x, t):
         # The model returns its estimation of the noise that was added.
-        return self.model(x, t)
+        return self.model(x, t=t)
+
+
+if __name__ == "__main__":
+    beta = _get_linear_beta_schdule(init_beta=0.0001, fin_beta=0.02, n_timesteps=1000)
+    alpha = 1 - beta
+    alpha_bar = torch.cumprod(alpha, dim=0)
+    alpha_bar.shape
+    alpha_bar_t = index_using_timestep(alpha_bar, timestep=3)
+    alpha_bar_t = index_using_timestep(alpha_bar, timestep=t)
+    alpha_bar_t.shape

@@ -110,16 +110,15 @@ def show_forward_process(ddpm, dl, device):
         break
 
 
-def extract(x, t):
+def index_using_timestep(x, t):
     return x[t].view(-1, 1, 1, 1)
 
 
-def get_noise(batch_size, n_channels, img_size, device):
+def sample_noise(batch_size, n_channels, img_size, device):
     return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
 
 
-def sample_timestep(n_timesteps, batch_size, device):
-    # return torch.randint(low=0, high=n_timesteps, size=(batch_size, 1), device=device)
+def sample_t(n_timesteps, batch_size, device):
     return torch.randint(low=0, high=n_timesteps, size=(batch_size,), device=device)
 
 
