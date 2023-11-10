@@ -3,19 +3,9 @@
     # https://nn.labml.ai/diffusion/stable_diffusion/sampler/ddpm.html
 
 import torch
-import numpy as np
-import imageio
-from pathlib import Path
 import argparse
-from tqdm import tqdm
 
-from utils import (
-    get_config,
-    sample_noise,
-    index_using_timestep,
-    image_to_grid,
-    save_image,
-)
+from utils import get_config
 from ddpm import DDPM
 
 
@@ -25,7 +15,7 @@ def get_args():
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--save_path", type=str, required=True)
-    parser.add_argument("--img_size", type=int, required=False, default=32)
+    parser.add_argument("--img_size", type=int, required=False, default=64)
     parser.add_argument("--n_frames", type=int, required=False, default=100)
 
     args = parser.parse_args()
@@ -43,63 +33,63 @@ def get_ddpm_from_checkpoint(ckpt_path, n_timesteps, init_beta, fin_beta, device
     return ddpm
 
 
-def _get_frame(x):
-    b, _, _, _ = x.shape
-    grid = image_to_grid(x, n_cols=int(b ** 0.5))
-    frame = np.array(grid)
-    return frame
+# def _get_frame(x):
+#     b, _, _, _ = x.shape
+#     grid = image_to_grid(x, n_cols=int(b ** 0.5))
+#     frame = np.array(grid)
+#     return frame
 
 
-@torch.no_grad()
-def perform_progressive_generation(
-    ddpm,
-    batch_size,
-    n_channels,
-    img_size,
-    device,
-    save_path,
-    x_t=None,
-    start_timestep=999,
-    image_only=True,
-):
-    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=100, dtype="uint16")
+# @torch.no_grad()
+# def perform_progressive_generation(
+#     ddpm,
+#     batch_size,
+#     n_channels,
+#     img_size,
+#     device,
+#     save_path,
+#     x_t=None,
+#     start_timestep=999,
+#     image_only=True,
+# ):
+#     frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=100, dtype="uint16")
 
-    ddpm.eval()
-    gif_path = Path(save_path).with_suffix(".gif")
-    with imageio.get_writer(gif_path, mode="I") as writer:
-        if x_t is not None:
-            x = x_t.clone()
-        else:
-            x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        for timestep in tqdm(range(start_timestep, -1, -1)):
-            t = torch.full(
-                size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
-            )
-            eps_theta = ddpm.predict_noise(x, t=t)
+#     ddpm.eval()
+#     gif_path = Path(save_path).with_suffix(".gif")
+#     with imageio.get_writer(gif_path, mode="I") as writer:
+#         if x_t is not None:
+#             x = x_t.clone()
+#         else:
+#             x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+#         for timestep in tqdm(range(start_timestep, -1, -1)):
+#             t = torch.full(
+#                 size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
+#             )
+#             eps_theta = ddpm.predict_noise(x, t=t)
 
-            beta_t = index_using_timestep(ddpm.beta.to(device), t=t)
-            alpha_t = index_using_timestep(ddpm.alpha.to(device), t=t)
-            alpha_bar_t = index_using_timestep(ddpm.alpha_bar.to(device), t=t)
+#             beta_t = index(ddpm.beta.to(device), t=t)
+#             alpha_t = index(ddpm.alpha.to(device), t=t)
+#             alpha_bar_t = index(ddpm.alpha_bar.to(device), t=t)
 
-            x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+#             x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
 
-            if timestep > 0:
-                eps = sample_noise(
-                    batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
-                )
-                x += (beta_t ** 0.5) * eps
+#             if timestep > 0:
+#                 eps = sample_noise(
+#                     batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
+#                 )
+#                 x += (beta_t ** 0.5) * eps
 
-            if (not image_only) and (timestep in frame_indices):
-                frame = _get_frame(x)
-                writer.append_data(frame)
+#             if (not image_only) and (timestep in frame_indices):
+#                 frame = _get_frame(x)
+#                 writer.append_data(frame)
 
-            if timestep == 0:
-                if x_t is not None:
-                    n_cols = x.shape[0]
-                else:
-                    n_cols = int(batch_size ** 0.5)
-                grid = image_to_grid(x, n_cols=n_cols)
-                save_image(grid, path=save_path)
+#             if timestep == 0:
+#                 if x_t is not None:
+#                     n_cols = x.shape[0]
+#                 else:
+#                     n_cols = int(batch_size ** 0.5)
+#                 grid = image_to_grid(x, n_cols=n_cols)
+#                 save_image(grid, path=save_path)
 
 
 if __name__ == "__main__":
@@ -113,11 +103,19 @@ if __name__ == "__main__":
         fin_beta=CONFIG["FIN_BETA"],
         device=CONFIG["DEVICE"],
     )
-    perform_progressive_generation(
-        ddpm=ddpm,
-        img_size=CONFIG["IMG_SIZE"],
-        n_channels=CONFIG["N_CHANNELS"],
+
+    # gen_image = ddpm.sample(
+    #     batch_size=CONFIG["BATCH_SIZE"],
+    #     n_channels=CONFIG["N_CHANNELS"],
+    #     img_size=CONFIG["IMG_SIZE"],
+    #     device=CONFIG["DEVICE"],
+    # )
+    # gen_image.show()
+
+    ddpm.progressively_sample(
         batch_size=CONFIG["BATCH_SIZE"],
-        save_path=CONFIG["SAVE_PATH"],
+        n_channels=CONFIG["N_CHANNELS"],
+        img_size=CONFIG["IMG_SIZE"],
         device=CONFIG["DEVICE"],
+        save_path=CONFIG["SAVE_PATH"],
     )

@@ -8,7 +8,7 @@ import scipy
 from tqdm import tqdm
 import math
 
-from utils import get_config, sample_noise, index_using_timestep
+from utils import get_config, sample_noise, index
 from inceptionv3 import InceptionV3
 from generate_images import get_ddpm_from_checkpoint
 
@@ -51,9 +51,9 @@ def generate_image(ddpm, batch_size, n_channels, img_size, device):
         )
         eps_theta = ddpm.predict_noise(x, t=t) # "$z_{\theta}(x_{t}, t)$"
 
-        beta_t = index_using_timestep(ddpm.beta.to(device), t=t)
-        alpha_t = index_using_timestep(ddpm.alpha.to(device), t=t)
-        alpha_bar_t = index_using_timestep(ddpm.alpha_bar.to(device), t=t)
+        beta_t = index(ddpm.beta.to(device), t=t)
+        alpha_t = index(ddpm.alpha.to(device), t=t)
+        alpha_bar_t = index(ddpm.alpha_bar.to(device), t=t)
 
         # Partially denoise image.
         # "$$\mu_{\theta}(x_{t}, t) =

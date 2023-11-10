@@ -110,7 +110,7 @@ def show_forward_process(ddpm, dl, device):
         break
 
 
-def index_using_timestep(x, t):
+def index(x, t):
     return x[t].view(-1, 1, 1, 1)
 
 

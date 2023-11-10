@@ -3,8 +3,18 @@
 
 import torch
 import torch.nn as nn
+import numpy as np
+import imageio
+from pathlib import Path
+from tqdm import tqdm
 
-from utils import index_using_timestep, sample_noise
+# from utils import index, sample_noise
+from utils import (
+    sample_noise,
+    index,
+    image_to_grid,
+    save_image,
+)
 from model import UNet
 
 
@@ -35,7 +45,7 @@ class DDPM(nn.Module):
         return torch.cumprod(alpha, dim=0)
 
     def _q(self, t): # $q(x_{t} \vert x_{0})$
-        alpha_bar_t = index_using_timestep(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
+        alpha_bar_t = index(self.alpha_bar.to(t.device), t=t) # "$\bar{\alpha_{t}}$"
         mean = (alpha_bar_t ** 0.5) # $\sqrt{\bar{\alpha_{t}}}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         return mean, var
@@ -48,13 +58,83 @@ class DDPM(nn.Module):
         mean, var = self._q(t)
         return mean * x0 + (var ** 0.5) * eps
 
-    def forward(self, x0, t, eps=None):
+    def forward(self, x0, t, eps=None): # Forward (diffusion) process
         noisy_image = self._sample_from_q(x0=x0, t=t, eps=eps)
         return noisy_image
 
+    # model_mean = (1 / alpha_t ** 0.5) * (x - beta_t * eps_theta / (1 - alpha_bar_t) ** 0.5)
     def predict_noise(self, x, t):
         # The model returns its estimation of the noise that was added.
         return self.model(x, t=t)
+
+    @torch.no_grad()
+    def _sample_from_p(self, x, timestep):
+        self.model.eval()
+
+        b, c, h, _ = x.shape
+        t = torch.full(
+            size=(b,), fill_value=timestep, dtype=torch.long, device=x.device,
+        )
+        alpha_t = index(self.alpha, t=t)
+        alpha_bar_t = index(self.alpha_bar, t=t)
+        eps_theta = self.predict_noise(x, t=t)
+        # # ["Algorithm 2"] "4: $$\mu_{\theta}(x_{t}, t) =
+        # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)$$
+        # + \sigma_{t}z"
+        model_mean = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+
+        if timestep > 0:
+            beta_t = index(self.beta, t=t)
+            eps = sample_noise(batch_size=b, n_channels=c, img_size=h, device=x.device)
+            model_mean += (beta_t ** 0.5) * eps
+
+        self.model.train()
+        return model_mean
+
+    def sample(self, batch_size, n_channels, img_size, device, n_cols=0): # Reverse process
+        x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+        for timestep in tqdm(range(self.n_timesteps - 1, -1, -1)):
+            x = self._sample_from_p(x, timestep=timestep)
+
+        if n_cols == 0:
+            n_cols = int(batch_size ** 0.5)
+        image = image_to_grid(x, n_cols=n_cols)
+        return image
+
+    def _get_frame(self, x):
+        b, _, _, _ = x.shape
+        grid = image_to_grid(x, n_cols=int(b ** 0.5))
+        frame = np.array(grid)
+        return frame
+
+    def progressively_sample(self, batch_size, n_channels, img_size, device, save_path, n_frames=100):
+        with imageio.get_writer(save_path, mode="I") as writer:
+            x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+            for timestep in tqdm(range(self.n_timesteps - 1, -1, -1)):
+                x = self._sample_from_p(x, timestep=timestep)
+
+                if timestep % (self.n_timesteps // n_frames) == 0:
+                    frame = self._get_frame(x)
+                    writer.append_data(frame)
+
+    def _interpolate(self, x, y, n):
+        _, b, c, d = x.shape
+        lambs = torch.linspace(start=0, end=1, steps=n)
+        lambs = lambs[:, None, None, None].expand(n, b, c, d)
+        return ((1 - lambs) * x + lambs * y)
+
+    def sample_using_interpolation(self, image1, image2, timestep, n=10):
+        t = torch.full(size=(1,), fill_value=timestep)
+        noisy_image1 = self(image1, t=t)
+        noisy_image2 = self(image2, t=t)
+
+        x = self._interpolate(noisy_image1, noisy_image2, n=n)
+        for timestep in tqdm(range(timestep, -1, -1)):
+            x = self._sample_from_p(x, timestep=timestep)
+        x = torch.cat([image1, x, image2], dim=0)
+        image = image_to_grid(x, n_cols=n + 2)
+        return image
+        
 
 
 if __name__ == "__main__":
@@ -62,6 +142,6 @@ if __name__ == "__main__":
     alpha = 1 - beta
     alpha_bar = torch.cumprod(alpha, dim=0)
     alpha_bar.shape
-    alpha_bar_t = index_using_timestep(alpha_bar, timestep=3)
-    alpha_bar_t = index_using_timestep(alpha_bar, timestep=t)
+    alpha_bar_t = index(alpha_bar, timestep=3)
+    alpha_bar_t = index(alpha_bar, timestep=t)
     alpha_bar_t.shape
