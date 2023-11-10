@@ -32,15 +32,14 @@ def get_args():
     return args
 
 
-def get_ddpm_from_checkpoint(config):
-    state_dict = torch.load(str(config["CKPT_PATH"]), map_location=config["DEVICE"])
+def get_ddpm_from_checkpoint(ckpt_path, n_timesteps, init_beta, fin_beta, device):
     ddpm = DDPM(
-        n_timesteps=config["N_TIMESTEPS"],
-        init_beta=config["INIT_BETA"],
-        fin_beta=config["FIN_BETA"],
-    ).to(config["DEVICE"])
-    # ddpm.load_state_dict(state_dict["ddpm"])
-    ddpm.load_state_dict(state_dict["model"])
+        n_timesteps=n_timesteps,
+        init_beta=init_beta,
+        fin_beta=fin_beta,
+    ).to(device)
+    state_dict = torch.load(str(ckpt_path), map_location=device)
+    ddpm.load_state_dict(state_dict)
     return ddpm
 
 
@@ -53,15 +52,26 @@ def _get_frame(x):
 
 @torch.no_grad()
 def perform_progressive_generation(
-    ddpm, batch_size, n_channels, img_size, save_path, device, n_frames=100, image_only=False,
+    ddpm,
+    batch_size,
+    n_channels,
+    img_size,
+    device,
+    save_path,
+    x_t=None,
+    start_timestep=999,
+    image_only=True,
 ):
-    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=n_frames, dtype="uint16")
+    frame_indices = np.linspace(start=0, stop=ddpm.n_timesteps, num=100, dtype="uint16")
 
     ddpm.eval()
     gif_path = Path(save_path).with_suffix(".gif")
     with imageio.get_writer(gif_path, mode="I") as writer:
-        x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        for timestep in range(ddpm.n_timesteps - 1, -1, -1):
+        if x_t is not None:
+            x = x_t.clone()
+        else:
+            x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
+        for timestep in tqdm(range(start_timestep, -1, -1)):
             t = torch.full(
                 size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
             )
@@ -84,7 +94,11 @@ def perform_progressive_generation(
                 writer.append_data(frame)
 
             if timestep == 0:
-                grid = image_to_grid(x, n_cols=int(CONFIG["BATCH_SIZE"] ** 0.5))
+                if x_t is not None:
+                    n_cols = x.shape[0]
+                else:
+                    n_cols = int(batch_size ** 0.5)
+                grid = image_to_grid(x, n_cols=n_cols)
                 save_image(grid, path=save_path)
 
 
@@ -92,7 +106,13 @@ if __name__ == "__main__":
     args = get_args()
     CONFIG = get_config(args)
 
-    ddpm = get_ddpm_from_checkpoint(ckpt_path=CONFIG["CKPT_PATH"], device=CONFIG["DEVICE"])
+    ddpm = get_ddpm_from_checkpoint(
+        ckpt_path=CONFIG["CKPT_PATH"],
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        init_beta=CONFIG["INIT_BETA"],
+        fin_beta=CONFIG["FIN_BETA"],
+        device=CONFIG["DEVICE"],
+    )
     perform_progressive_generation(
         ddpm=ddpm,
         img_size=CONFIG["IMG_SIZE"],

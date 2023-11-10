@@ -7,6 +7,19 @@ from PIL import Image
 from pathlib import Path
 
 
+def get_transformer(img_size, hflip=False):
+    transforms = [
+        T.Resize(img_size),
+        T.CenterCrop(img_size),
+        T.ToTensor(),
+        T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+    ]
+    if hflip:
+        # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
+        transforms.append(T.RandomHorizontalFlip(0.5))
+    return T.Compose(transforms)
+
+
 class CelebADataset(Dataset):
     def __init__(self, data_dir, img_size):
         super().__init__()
@@ -14,14 +27,7 @@ class CelebADataset(Dataset):
         self.img_paths = list(Path(data_dir).glob("**/*.jpg"))
         self.img_size = img_size
 
-        self.transformer = T.Compose([
-            T.Resize(img_size),
-            T.CenterCrop(img_size),
-            # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
-            T.RandomHorizontalFlip(0.5),
-            T.ToTensor(),
-            T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
-        ])
+        self.transformer = get_transformer(img_size=img_size, hflip=True)
 
     def __len__(self):
         return len(self.img_paths)

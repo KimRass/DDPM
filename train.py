@@ -179,12 +179,11 @@ if __name__ == "__main__":
     for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
         accum_loss = 0
         start_time = time()
-        # for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
-        # for x0 in tqdm(train_dl): # "$x_{0} \sim q(x_{0})$"
-        #     loss = train_single_step(
-        #         x0=x0, ddpm=ddpm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
-        #     )
-        #     accum_loss += loss.item()
+        for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
+            loss = train_single_step(
+                x0=x0, ddpm=ddpm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
+            )
+            accum_loss += loss.item()
 
         ### Evaluate.
         cur_fid = evaluator.evaluate(ddpm=ddpm, device=CONFIG["DEVICE"])
