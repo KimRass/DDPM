@@ -89,10 +89,11 @@ class DDPM(nn.Module):
         self.model.train()
         return model_mean
 
+    @torch.no_grad()
     def sample(self, batch_size, n_channels, img_size, device, to_image=True): # Reverse process
         x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
         for timestep in range(self.n_timesteps - 1, -1, -1):
-            x = self._sample_from_p(x, timestep=timestep)
+            x = self._sample_from_p(x.detach(), timestep=timestep)
         if not to_image:
             return x
 
