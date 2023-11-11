@@ -56,7 +56,7 @@ def get_fid(embed1, embed2):
 class Evaluator(object):
     def __init__(self, ddpm, n_samples, dl, device):
 
-        self.ddpm = ddpm.to(device)
+        self.ddpm = ddpm
         self.ddpm.eval()
         self.n_samples = n_samples
         self.batch_size = dl.batch_size
@@ -82,7 +82,7 @@ class Evaluator(object):
         return real_embed
 
     @torch.no_grad()
-    def get_synthesized_embedding(self, device):
+    def get_synthesized_embedding(self):
         print("Calculating embeddings for synthetic data distribution...")
 
         embeds = list()
@@ -91,7 +91,7 @@ class Evaluator(object):
                 batch_size=self.batch_size,
                 n_channels=self.n_channels,
                 img_size=self.img_size,
-                device=device,
+                device=self.device,
                 to_image=False,
             )
             embed = self.inceptionv3(x0.detach())
@@ -99,8 +99,8 @@ class Evaluator(object):
         synth_embed = torch.cat(embeds)[: self.n_samples]
         return synth_embed
 
-    def evaluate(self, ddpm, device):
-        synth_embed = self.get_synthesized_embedding(ddpm=ddpm, device=device)
+    def evaluate(self):
+        synth_embed = self.get_synthesized_embedding()
         fid = get_fid(self.real_embed, synth_embed)
         return fid
 
@@ -127,5 +127,5 @@ if __name__ == "__main__":
     evaluator = Evaluator(
         ddpm=ddpm, n_samples=CONFIG["N_EVAL_IMAGES"], dl=train_dl, device=CONFIG["DEVICE"],
     )
-    fid = evaluator.evaluate(ddpm=ddpm, device=CONFIG["DEVICE"])
+    fid = evaluator.evaluate()
     print(f"Frechet instance distance: {fid:.1f}")
