@@ -6,6 +6,7 @@ import torch
 import argparse
 from pathlib import Path
 from tqdm import tqdm
+import math
 
 from utils import get_config, save_image
 from ddpm import DDPM
@@ -16,6 +17,7 @@ def get_args():
 
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, required=False, default=100)
 
     args = parser.parse_args()
     return args
@@ -44,9 +46,9 @@ if __name__ == "__main__":
         device=CONFIG["DEVICE"],
     )
 
-    for idx in tqdm(range(1, CONFIG["N_EVAL_IMAGES"] + 1)):
+    for idx in tqdm(range(1, math.ceil(CONFIG["N_EVAL_IMAGES"] / CONFIG["BATCH_SIZE"]) + 1)):
         gen_image = ddpm.sample(
-            batch_size=1,
+            batch_size=CONFIG["BATCH_SIZE"],
             n_channels=CONFIG["N_CHANNELS"],
             img_size=CONFIG["IMG_SIZE"],
             device=CONFIG["DEVICE"],
