@@ -5,22 +5,21 @@ import torch
 import torch.nn as nn
 import numpy as np
 import imageio
-from pathlib import Path
 from tqdm import tqdm
 
-# from utils import index, sample_noise
 from utils import (
     sample_noise,
     index,
     image_to_grid,
-    save_image,
+    get_linear_beta_schdule,
 )
 from model import UNet
 
 
 def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
     # "We set the forward process variances to constants increasing linearly."
-    return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
+    # return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
+    return torch.linspace(init_beta, fin_beta, n_timesteps + 1) # "$\beta_{t}$"
 
 
 class DDPM(nn.Module):
@@ -31,7 +30,7 @@ class DDPM(nn.Module):
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        self.beta = _get_linear_beta_schdule(
+        self.beta = get_linear_beta_schdule(
             init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps,
         )
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
@@ -62,7 +61,6 @@ class DDPM(nn.Module):
         noisy_image = self._sample_from_q(x0=x0, t=t, eps=eps)
         return noisy_image
 
-    # model_mean = (1 / alpha_t ** 0.5) * (x - beta_t * eps_theta / (1 - alpha_bar_t) ** 0.5)
     def predict_noise(self, x, t):
         # The model returns its estimation of the noise that was added.
         return self.model(x, t=t)
@@ -77,7 +75,7 @@ class DDPM(nn.Module):
         )
         alpha_t = index(self.alpha, t=t)
         alpha_bar_t = index(self.alpha_bar, t=t)
-        eps_theta = self.predict_noise(x, t=t)
+        eps_theta = self.predict_noise(x.detach(), t=t)
         # # ["Algorithm 2"] "4: $$\mu_{\theta}(x_{t}, t) =
         # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)$$
         # + \sigma_{t}z"
@@ -117,31 +115,31 @@ class DDPM(nn.Module):
                     frame = self._get_frame(x)
                     writer.append_data(frame)
 
-    def _interpolate(self, x, y, n):
+    def _linearly_interpolate(self, x, y, n):
         _, b, c, d = x.shape
         lambs = torch.linspace(start=0, end=1, steps=n)
         lambs = lambs[:, None, None, None].expand(n, b, c, d)
         return ((1 - lambs) * x + lambs * y)
 
-    def sample_using_interpolation(self, image1, image2, timestep, n=10):
+    def interpolate(self, image1, image2, timestep, n=10, to_image=True):
         t = torch.full(size=(1,), fill_value=timestep)
         noisy_image1 = self(image1, t=t)
         noisy_image2 = self(image2, t=t)
 
-        x = self._interpolate(noisy_image1, noisy_image2, n=n)
-        for timestep in tqdm(range(timestep, -1, -1)):
+        x = self._linearly_interpolate(noisy_image1, noisy_image2, n=n)
+        for timestep in tqdm(range(timestep - 1, -1, -1)):
             x = self._sample_from_p(x, timestep=timestep)
         x = torch.cat([image1, x, image2], dim=0)
+        if not to_image:
+            return x
         image = image_to_grid(x, n_cols=n + 2)
         return image
-        
 
-
-if __name__ == "__main__":
-    beta = _get_linear_beta_schdule(init_beta=0.0001, fin_beta=0.02, n_timesteps=1000)
-    alpha = 1 - beta
-    alpha_bar = torch.cumprod(alpha, dim=0)
-    alpha_bar.shape
-    alpha_bar_t = index(alpha_bar, timestep=3)
-    alpha_bar_t = index(alpha_bar, timestep=t)
-    alpha_bar_t.shape
+    def coarse_to_fine_interpolate(self, image1, image2, n_rows=9, n=10):
+        rows = list()
+        for timestep in range(self.n_timesteps, -1, - self.n_timesteps // (n_rows - 1)):
+            row = self.interpolate(image1, image2, timestep=timestep, n=n, to_image=False)
+            rows.append(row)
+        x = torch.cat(rows, dim=0)
+        image = image_to_grid(x, n_cols=n + 2)
+        return image

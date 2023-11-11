@@ -7,10 +7,24 @@ import numpy as np
 import scipy
 from tqdm import tqdm
 import math
+import argparse
 
-from utils import get_config, sample_noise, index
+from utils import get_config
 from inceptionv3 import InceptionV3
-from generate_images import get_ddpm_from_checkpoint
+from generate_image import get_ddpm_from_checkpoint
+from train import get_tain_dl
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--ckpt_path", type=str, required=True)
+    parser.add_argument("--data_dir", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--n_cpus", type=int, required=False, default=0)
+
+    args = parser.parse_args()
+    return args
 
 
 def get_matrix_sqrt(x):
@@ -39,35 +53,6 @@ def get_fid(embed1, embed2):
     return fd
 
 
-@torch.no_grad()
-def generate_image(ddpm, batch_size, n_channels, img_size, device):
-    ddpm.eval()
-    # Sample pure noise from a Gaussian distribution.
-    # ["Algorithm 2"] "1: $x_{T} \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-    x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-    for timestep in range(ddpm.n_timesteps - 1, -1, -1):
-        t = torch.full(
-            size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
-        )
-        eps_theta = ddpm.predict_noise(x, t=t) # "$z_{\theta}(x_{t}, t)$"
-
-        beta_t = index(ddpm.beta.to(device), t=t)
-        alpha_t = index(ddpm.alpha.to(device), t=t)
-        alpha_bar_t = index(ddpm.alpha_bar.to(device), t=t)
-
-        # Partially denoise image.
-        # "$$\mu_{\theta}(x_{t}, t) =
-        # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$"
-        x = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
-
-        if timestep > 0:
-            eps = sample_noise(
-                batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device,
-            ) # ["Algorithm 2"] "3: $z \sim \mathcal{L}(\mathbf{0}, \mathbf{I})$"
-            x += (beta_t ** 0.5) * eps
-    return x
-
-
 class Evaluator(object):
     def __init__(self, n_samples, n_cpus, dl, device):
 
@@ -89,7 +74,7 @@ class Evaluator(object):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
-            embed = self.inceptionv3(x0)
+            embed = self.inceptionv3(x0.detach())
             embeds.append(embed)
         real_embed = torch.cat(embeds)[: self.n_samples]
         return real_embed
@@ -98,15 +83,14 @@ class Evaluator(object):
     def get_synthesized_embedding(self, ddpm, device):
         embeds = list()
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
-            x0 = generate_image(
-                ddpm=ddpm,
+            x0 = ddpm.sample(
                 batch_size=self.batch_size,
                 n_channels=self.n_channels,
                 img_size=self.img_size,
                 device=device,
             )
             x0 = x0.to(self.device)
-            embed = self.inceptionv3(x0)
+            embed = self.inceptionv3(x0.detach())
             embeds.append(embed)
         synth_embed = torch.cat(embeds)[: self.n_samples]
         return synth_embed
@@ -115,3 +99,29 @@ class Evaluator(object):
         synth_embed = self.get_synthesized_embedding(ddpm=ddpm, device=device)
         fid = get_fid(self.real_embed, synth_embed)
         return fid
+
+
+if __name__ == "__main__":
+    args = get_args()
+    CONFIG = get_config(args)
+
+    train_dl = get_tain_dl(
+        data_dir=CONFIG["DATA_DIR"],
+        img_size=CONFIG["IMG_SIZE"],
+        batch_size=CONFIG["BATCH_SIZE"],
+        n_cpus=CONFIG["N_CPUS"],
+    )
+
+    ddpm = get_ddpm_from_checkpoint(
+        ckpt_path=CONFIG["CKPT_PATH"],
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        init_beta=CONFIG["INIT_BETA"],
+        fin_beta=CONFIG["FIN_BETA"],
+        device=CONFIG["DEVICE"],
+    )
+
+    evaluator = Evaluator(
+        n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
+    )
+    fid = evaluator.evaluate(ddpm=ddpm, device=CONFIG["DEVICE"])
+    print(f"Frechet instance distance: {fid}")

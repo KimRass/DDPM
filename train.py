@@ -11,7 +11,6 @@ from pathlib import Path
 import math
 from time import time
 import wandb
-from tqdm import tqdm
 
 from utils import (
     set_seed,
@@ -26,7 +25,7 @@ from ddpm import DDPM
 from evaluate import Evaluator
 
 
-def _get_args():
+def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--run_id", type=str, required=False)
@@ -34,7 +33,6 @@ def _get_args():
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
-    parser.add_argument("--img_size", type=int, required=False, default=32)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
     parser.add_argument("--torch_compile", action="store_true", required=False)
 
@@ -131,7 +129,7 @@ def get_tain_dl(data_dir, img_size, batch_size, n_cpus):
 
 
 if __name__ == "__main__":
-    args = _get_args()
+    args = get_args()
     CONFIG = get_config(args)
     set_seed(CONFIG["SEED"])
     init_wandb(run_id=CONFIG["RUN_ID"], img_size=CONFIG["IMG_SIZE"])
@@ -159,21 +157,19 @@ if __name__ == "__main__":
     )
 
     if wandb.run.resumed:
-        # state_dict = torch.load(str(CONFIG["CKPT_TAR_PATH"]), map_location=CONFIG["DEVICE"])
+        # state_dict = torch.load(str(CONFIG["WANDB_CKPT_PATH"]), map_location=CONFIG["DEVICE"])
         state_dict = torch.load(
-            str(wandb.restore(CONFIG["CKPT_TAR_PATH"])), map_location=CONFIG["DEVICE"],
+            str(wandb.restore(CONFIG["WANDB_CKPT_PATH"])), map_location=CONFIG["DEVICE"],
         )
         ddpm.load_state_dict(state_dict["ddpm"])
         optim.load_state_dict(state_dict["optimizer"])
         scaler.load_state_dict(state_dict["scaler"])
         init_epoch = state_dict["epoch"]
-        # min_loss = state_dict["loss"]
-        best_fid = state_dict["fid"]
+        min_loss = state_dict["loss"]
         print(f"Resuming from epoch {init_epoch + 1}...")
     else:
         init_epoch = 0
-        # min_loss = math.inf
-        best_fid = math.inf
+        min_loss = math.inf
 
     n_cols = int(CONFIG["BATCH_SIZE"] ** 0.5)
     for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
@@ -184,32 +180,26 @@ if __name__ == "__main__":
                 x0=x0, ddpm=ddpm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
             )
             accum_loss += loss.item()
-
-        ### Evaluate.
-        cur_fid = evaluator.evaluate(ddpm=ddpm, device=CONFIG["DEVICE"])
+        cur_loss = cur_loss
+        if cur_loss < min_loss:
+            min_loss = cur_loss
 
         msg = f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
         msg += f"[ {get_elapsed_time(start_time)} ]"
-        msg += f"[ Loss: {accum_loss:.5f} ]"
-        msg += f"[ FID: {cur_fid:.3f} ]"
-
-        wandb.log({"Loss": accum_loss, "FID": cur_fid}, step=epoch)
-
-        if cur_fid < best_fid:
-            filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
-            save_ddpm(
-                ddpm=ddpm,
-                save_path=CONFIG["CKPTS_DIR"]/filename,
-            )
-            msg += f" (Saved checkpoint.)"
-            best_fid = cur_fid
+        msg += f"[ Min loss: {min_loss:.5f} ]"
+        msg += f"[ Loss: {cur_loss:.5f} ]"
         print(msg)
+
+        wandb.log({"Min loss": min_loss, "Loss": cur_loss}, step=epoch)
+
+        filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
+        save_ddpm(ddpm=ddpm, save_path=CONFIG["CKPTS_DIR"]/filename)
 
         save_wandb_checkpoint(
             epoch=epoch,
             ddpm=ddpm,
             scaler=scaler,
             optim=optim,
-            loss=accum_loss,
-            save_path=CONFIG["CKPT_TAR_PATH"],
+            loss=cur_loss,
+            save_path=CONFIG["WANDB_CKPT_PATH"],
         )

@@ -60,26 +60,58 @@ $$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \
     LR = 0.00005
     ```
 ## Image Generation
-- Resolution of 32×32
-    - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
-    - <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
-- Resolution of 64×64
-    - <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
-- How to generate images
-    ```bash
-    # e.g.,
-    python3 generate_images.py\
-        --ckpt_path="../ddpm_celeba.pth"\
-        --batch_size=36\
-        --save_path="generated_images/4.jpg"
-    ```
-### Interpolation in Feature Space
+### `"normal"` mode
+```bash
+# e.g.,
+python3 generate_image.py\
+    --mode="normal"
+    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
+    --save_path="generated_images/normal_and_progression/1.jpg"\
+    --batch_size=4
+```
+- <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
+- <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
+### `"progression"` mode
+```bash
+# e.g.,
+python3 generate_image.py\
+    --mode="progression"
+    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
+    --save_path="generated_images/normal_and_progression/1.gif"\
+    --batch_size=4
+```
+- <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
+### `"interpolation"` mode
+```bash
+# e.g.,
+python3 generate_image.py
+    --mode="interpolation"\
+    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
+    --save_path="generated_images/interpolation/1.jpg"\
+    --data_dir="/Users/jongbeomkim/Documents/datasets/celeba"\
+    --idx1=10000\
+    --idx2=11000\
+    --timestep=300
+```
 - Start timestep of 500
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/444c4c27-774c-4ec4-b07f-f2cbf7012433" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/ed7549de-73e1-4ea1-babe-0f1288584d5f" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/32c623d9-8e16-4913-a279-c48f75c05ffd" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/b7cb4e24-854d-4d47-8087-b1b4acf7f58b" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/88d32ee4-3155-4009-9796-e3c00fda9bc1" width="700">
+### `"coarse_to_fine"` mode
+```bash
+# e.g.,
+python3 generate_image.py
+    --mode="coarse_to_fine"\
+    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
+    --save_path="generated_images/interpolation/1.jpg"\
+    --data_dir="/Users/jongbeomkim/Documents/datasets/celeba"\
+    --idx1=10000\
+    --idx2=11000\
+    --timestep=300
+```
+- <img src="https://github.com/KimRass/DDPM/assets/105417680/6dcf9ba6-5988-44ed-92b2-a63d9db09719" width="700">
 ## Impotant Concepts
 ### Kullback–Leibler Divergence (KL Divergence)
 - Also called 'relative entropy' and 'I-divergence'.

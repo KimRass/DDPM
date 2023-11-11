@@ -1,6 +1,6 @@
-# "We assume that image data consists of integers in $\{0, 1, \ldots, 255\}$ scaled linearly
-# to $[-1, 1]$. This ensures that the neural network reverse process operates
-# on consistently scaled inputs starting from the standard normal prior $p(x_{T})$."
+# References:
+    # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
+    # https://nn.labml.ai/diffusion/stable_diffusion/sampler/ddpm.html
 
 import torch
 from torchvision.utils import make_grid
@@ -31,7 +31,7 @@ def get_config(args=None):
 
     config["PARENT_DIR"] = Path(__file__).resolve().parent
     config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"
-    config["CKPT_TAR_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
+    config["WANDB_CKPT_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
 
     config["DEVICE"] = get_device()
     return config
@@ -93,21 +93,10 @@ def image_to_grid(image, n_cols):
     return grid
 
 
-def show_forward_process(ddpm, dl, device):
-    for batch in dl:
-        image = batch[0]
-        image = image.to(device)
-
-        grid = image_to_grid(image, n_cols=4)
-        grid.show()
-
-        for percent in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]:
-            grid = image_to_grid(
-                ddpm(image, t=[int(percent * ddpm.n_timesteps) - 1] * len(image)),
-                n_cols=4,
-            )
-            grid.show()
-        break
+def get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
+    # "We set the forward process variances to constants increasing linearly."
+    # return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
+    return torch.linspace(init_beta, fin_beta, n_timesteps + 1) # "$\beta_{t}$"
 
 
 def index(x, t):
