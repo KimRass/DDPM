@@ -88,7 +88,7 @@ python3 generate_image.py
     --mode="interpolation"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/interpolation/1.jpg"\
-    --data_dir="/Users/jongbeomkim/Documents/datasets/celeba"\
+    --data_dir="../img_align_celeba/"\
     --idx1=10000\
     --idx2=11000\
     --timestep=300
@@ -106,12 +106,22 @@ python3 generate_image.py
     --mode="coarse_to_fine"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/interpolation/1.jpg"\
-    --data_dir="/Users/jongbeomkim/Documents/datasets/celeba"\
+    --data_dir="../img_align_celeba/"\
     --idx1=10000\
     --idx2=11000\
     --timestep=300
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/6dcf9ba6-5988-44ed-92b2-a63d9db09719" width="700">
+## Evaluation
+```bash
+# e.g.,
+python3 evaluate.py
+    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
+    --data_dir="../img_align_celeba/"\
+    --batch_size=64\
+    --n_cpus=4 # Optional
+```
+- Frechet instance distribution:
 ## Impotant Concepts
 ### Kullback–Leibler Divergence (KL Divergence)
 - Also called 'relative entropy' and 'I-divergence'.
