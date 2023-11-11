@@ -70,7 +70,7 @@ class Evaluator(object):
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.dl)
-        for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
+        for _ in range(math.ceil(self.n_samples // self.batch_size)):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)

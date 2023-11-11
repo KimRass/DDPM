@@ -73,8 +73,8 @@ class DDPM(nn.Module):
         t = torch.full(
             size=(b,), fill_value=timestep, dtype=torch.long, device=x.device,
         )
-        alpha_t = index(self.alpha, t=t)
-        alpha_bar_t = index(self.alpha_bar, t=t)
+        alpha_t = index(self.alpha.to(x.device), t=t)
+        alpha_bar_t = index(self.alpha_bar.to(x.device), t=t)
         eps_theta = self.predict_noise(x.detach(), t=t)
         # # ["Algorithm 2"] "4: $$\mu_{\theta}(x_{t}, t) =
         # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)$$
@@ -82,7 +82,7 @@ class DDPM(nn.Module):
         model_mean = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
 
         if timestep > 0:
-            beta_t = index(self.beta, t=t)
+            beta_t = index(self.beta.to(t.x.device), t=t)
             eps = sample_noise(batch_size=b, n_channels=c, img_size=h, device=x.device)
             model_mean += (beta_t ** 0.5) * eps
 
