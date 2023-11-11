@@ -125,4 +125,4 @@ if __name__ == "__main__":
         n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
     )
     fid = evaluator.evaluate(ddpm=ddpm, device=CONFIG["DEVICE"])
-    print(f"Frechet instance distance: {fid}")
+    print(f"Frechet instance distance: {fid:.3f}")
