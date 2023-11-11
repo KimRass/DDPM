@@ -81,6 +81,8 @@ class Evaluator(object):
 
     @torch.no_grad()
     def get_synthesized_embedding(self, ddpm, device):
+        print("Calculating embeddings for synthetic data distribution...")
+
         embeds = list()
         for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
             x0 = ddpm.sample(
@@ -125,4 +127,4 @@ if __name__ == "__main__":
         n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
     )
     fid = evaluator.evaluate(ddpm=ddpm, device=CONFIG["DEVICE"])
-    print(f"Frechet instance distance: {fid:.3f}")
+    print(f"Frechet instance distance: {fid:.1f}")
