@@ -22,7 +22,6 @@ from utils import (
 )
 from celeba import CelebADataset
 from ddpm import DDPM
-from evaluate import Evaluator
 
 
 def get_args():
@@ -151,10 +150,6 @@ if __name__ == "__main__":
     optim = Adam(ddpm.parameters(), lr=CONFIG["LR"])
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
     crit = nn.MSELoss(reduction="mean")
-
-    evaluator = Evaluator(
-        n_samples=CONFIG["N_EVAL_IMAGES"], n_cpus=CONFIG["N_CPUS"], dl=train_dl, device=CONFIG["DEVICE"],
-    )
 
     if wandb.run.resumed:
         # state_dict = torch.load(str(CONFIG["WANDB_CKPT_PATH"]), map_location=CONFIG["DEVICE"])
