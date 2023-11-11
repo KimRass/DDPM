@@ -80,4 +80,4 @@ if __name__ == "__main__":
                 gen_image = ddpm.interpolate(image1, image2, timestep=CONFIG["TIMESTEP"])
             else:
                 gen_image = ddpm.coarse_to_fine_interpolate(image1, image2)
-        save_image(gen_image, CONFIG["SAVE_PATH"])
+        save_image(gen_image, path=CONFIG["SAVE_PATH"])
