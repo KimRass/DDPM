@@ -88,6 +88,7 @@ class Evaluator(object):
                 n_channels=self.n_channels,
                 img_size=self.img_size,
                 device=device,
+                to_image=False,
             )
             x0 = x0.to(self.device)
             embed = self.inceptionv3(x0.detach())

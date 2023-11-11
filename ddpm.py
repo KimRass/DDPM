@@ -89,14 +89,14 @@ class DDPM(nn.Module):
         self.model.train()
         return model_mean
 
-    def sample(self, batch_size, n_channels, img_size, device, n_cols=0): # Reverse process
+    def sample(self, batch_size, n_channels, img_size, device, to_image=True): # Reverse process
         x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        for timestep in tqdm(range(self.n_timesteps - 1, -1, -1)):
+        for timestep in range(self.n_timesteps - 1, -1, -1):
             x = self._sample_from_p(x, timestep=timestep)
+        if not to_image:
+            return x
 
-        if n_cols == 0:
-            n_cols = int(batch_size ** 0.5)
-        image = image_to_grid(x, n_cols=n_cols)
+        image = image_to_grid(x, n_cols=int(batch_size ** 0.5))
         return image
 
     def _get_frame(self, x):
@@ -108,7 +108,7 @@ class DDPM(nn.Module):
     def progressively_sample(self, batch_size, n_channels, img_size, device, save_path, n_frames=100):
         with imageio.get_writer(save_path, mode="I") as writer:
             x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-            for timestep in tqdm(range(self.n_timesteps - 1, -1, -1)):
+            for timestep in range(self.n_timesteps - 1, -1, -1):
                 x = self._sample_from_p(x, timestep=timestep)
 
                 if timestep % (self.n_timesteps // n_frames) == 0:
@@ -127,7 +127,7 @@ class DDPM(nn.Module):
         noisy_image2 = self(image2, t=t)
 
         x = self._linearly_interpolate(noisy_image1, noisy_image2, n=n)
-        for timestep in tqdm(range(timestep - 1, -1, -1)):
+        for timestep in range(timestep - 1, -1, -1):
             x = self._sample_from_p(x, timestep=timestep)
         x = torch.cat([image1, x, image2], dim=0)
         if not to_image:
