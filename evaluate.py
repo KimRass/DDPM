@@ -73,7 +73,6 @@ class Evaluator(object):
 
         self.real_embed = self.get_embedding(real_dl)
         self.gen_embed = self.get_embedding(gen_dl)
-        print(self.real_embed.shape, self.gen_embed.shape)
 
     def _to_embeddding(self, x):
         embed = self.inceptionv3(x.detach())
@@ -144,4 +143,4 @@ if __name__ == "__main__":
         device=CONFIG["DEVICE"],
     )
     fid = evaluator.evaluate()
-    print(f"Frechet instance distance: {fid:.2f}")
+    print(f"FID: {fid:.2f}")
