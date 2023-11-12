@@ -147,7 +147,6 @@ if __name__ == "__main__":
     )
     gen_dl = DataLoader(
         gen_ds,
-        gen_ds,
         batch_size=CONFIG["BATCH_SIZE"],
         shuffle=True,
         num_workers=CONFIG["N_CPUS"],
