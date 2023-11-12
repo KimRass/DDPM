@@ -23,6 +23,7 @@ def get_args():
     parser.add_argument("--real_data_dir", type=str, required=True)
     parser.add_argument("--gen_data_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--n_imgs", type=int, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
@@ -136,7 +137,7 @@ if __name__ == "__main__":
         real_ds,
         batch_size=CONFIG["BATCH_SIZE"],
         shuffle=True,
-        n_cpus=CONFIG["N_CPUS"],
+        num_workers=CONFIG["N_CPUS"],
         pin_memory=True,
         drop_last=True,
     )
@@ -149,7 +150,7 @@ if __name__ == "__main__":
         gen_ds,
         batch_size=CONFIG["BATCH_SIZE"],
         shuffle=True,
-        n_cpus=CONFIG["N_CPUS"],
+        num_workers=CONFIG["N_CPUS"],
         pin_memory=True,
         drop_last=True,
     )
