@@ -123,8 +123,8 @@ if __name__ == "__main__":
         batch_size=CONFIG["BATCH_SIZE"],
         shuffle=True,
         num_workers=CONFIG["N_CPUS"],
-        pin_memory=True,
-        drop_last=True,
+        pin_memory=False,
+        drop_last=False,
     )
     gen_ds = ImageGridDataset(
         data_dir=CONFIG["GEN_DATA_DIR"],
@@ -135,8 +135,8 @@ if __name__ == "__main__":
         batch_size=CONFIG["BATCH_SIZE"],
         shuffle=True,
         num_workers=CONFIG["N_CPUS"],
-        pin_memory=True,
-        drop_last=True,
+        pin_memory=False,
+        drop_last=False,
     )
 
     ddpm = get_ddpm_from_checkpoint(
