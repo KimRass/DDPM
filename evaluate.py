@@ -57,12 +57,12 @@ def get_fid(embed1, embed2):
 
 
 class Evaluator(object):
-    def __init__(self, ddpm, n_samples, real_dl, gen_dl, device):
+    def __init__(self, ddpm, n_eval_imgs, batch_size, real_dl, gen_dl, device):
 
         self.ddpm = ddpm
         self.ddpm.eval()
-        self.n_samples = n_samples
-        self.batch_size = real_dl.batch_size
+        self.n_eval_imgs = n_eval_imgs
+        self.batch_size = batch_size
         self.real_dl = real_dl
         self.gen_dl = gen_dl
         self.device = device
@@ -82,26 +82,26 @@ class Evaluator(object):
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.real_dl)
-        for _ in range(math.ceil(self.n_samples // self.batch_size)):
+        for _ in range(math.ceil(self.n_eval_imgs // self.batch_size)):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
             embed = self._to_embeddding(x0)
             embeds.append(embed)
-        real_embed = np.concatenate(embeds)[: self.n_samples]
+        real_embed = np.concatenate(embeds)[: self.n_eval_imgs]
         return real_embed
 
     @torch.no_grad()
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.real_dl)
-        for _ in range(math.ceil(self.n_samples // self.batch_size)):
+        for _ in range(math.ceil(self.n_eval_imgs // self.batch_size)):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
             embed = self._to_embeddding(x0)
             embeds.append(embed)
-        gen_embed = np.concatenate(embeds)[: self.n_samples]
+        gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
         return gen_embed
 
     # @torch.no_grad()
@@ -109,7 +109,7 @@ class Evaluator(object):
     #     print("Calculating embeddings for synthetic data distribution...")
 
     #     embeds = list()
-    #     for _ in tqdm(range(math.ceil(self.n_samples // self.batch_size))):
+    #     for _ in tqdm(range(math.ceil(self.n_eval_imgs // self.batch_size))):
     #         x0 = self.ddpm.sample(
     #             batch_size=self.batch_size,
     #             n_channels=self.n_channels,
@@ -119,7 +119,7 @@ class Evaluator(object):
     #         )
     #         embed = self._to_embeddding(x0)
     #         embeds.append(embed)
-    #     synth_embed = np.concatenate(embeds)[: self.n_samples]
+    #     synth_embed = np.concatenate(embeds)[: self.n_eval_imgs]
     #     return synth_embed
 
     def evaluate(self):
@@ -165,7 +165,8 @@ if __name__ == "__main__":
 
     evaluator = Evaluator(
         ddpm=ddpm,
-        n_samples=CONFIG["N_EVAL_IMGS"],
+        n_eval_imgs=CONFIG["N_EVAL_IMGS"],
+        batch_size=CONFIG["BATCH_SIZE"],
         real_dl=real_dl,
         gen_dl=gen_dl,
         device=CONFIG["DEVICE"],
