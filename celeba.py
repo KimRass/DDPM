@@ -43,7 +43,7 @@ class CelebADataset(Dataset):
 
 
 class ImageGridDataset(Dataset):
-    def __init__(self, data_dir, img_size, padding=1, n_cells=100):
+    def __init__(self, data_dir, img_size, n_cells=100, padding=1):
         super().__init__()
 
         self.img_paths = sorted(list(Path(data_dir).glob("**/*.jpg")))

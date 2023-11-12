@@ -47,18 +47,9 @@ $$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \
 ## Pre-trained Models
 - [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
-    ```python
-    IMG_SIZE = 32
-    BATCH_SIZE = 256
-    LR = 0.0001
-    ```
-- [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1N2EhITXPR556adGCLiDqBuaUl39omXTd/view?usp=sharing)
+- [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing)
     - Trained on CelebA dataset for 28 epochs
-    ```python
-    IMG_SIZE = 64
-    BATCH_SIZE = 64
-    LR = 0.00005
-    ```
+    - Frechet instance distribution: 0.85
 ## Image Generation
 ### `"normal"` mode
 ```bash
@@ -116,12 +107,15 @@ python3 generate_image.py
 ```bash
 # e.g.,
 python3 evaluate.py
-    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --data_dir="../img_align_celeba/"\
-    --batch_size=64\
-    --n_cpus=4 # Optional
+    --ckpt_path="checkpoints/64×64_epoch_29.pth"\
+    --real_data_dir="../img_align_celeba/"\
+    --gen_data_dir="../ddpm_eval_images/"\
+    --batch_size=32\
+    --n_eval_imgs=28000\
+    --n_cpus=4\ # Optional
+    --padding=1\ # Optional
+    --n_cells=100 # Optional
 ```
-- Frechet instance distribution:
 ## Impotant Concepts
 ### Kullback–Leibler Divergence (KL Divergence)
 - Also called 'relative entropy' and 'I-divergence'.

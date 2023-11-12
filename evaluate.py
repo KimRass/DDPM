@@ -24,7 +24,10 @@ def get_args():
     parser.add_argument("--gen_data_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--n_eval_imgs", type=int, required=True)
+
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
+    parser.add_argument("--padding", type=int, required=False, default=1)
+    parser.add_argument("--n_cells", type=int, required=False, default=100)
 
     args = parser.parse_args()
     return args
@@ -63,15 +66,14 @@ class Evaluator(object):
         self.ddpm.eval()
         self.n_eval_imgs = n_eval_imgs
         self.batch_size = batch_size
-        self.real_dl = real_dl
-        self.gen_dl = gen_dl
         self.device = device
 
         self.inceptionv3 = InceptionV3().to(device)
         self.inceptionv3.eval()
 
-        self.real_embed = self.get_real_embedding()
-        self.gen_embed = self.get_generated_embedding()
+        self.real_embed = self.get_embedding(real_dl)
+        self.gen_embed = self.get_embedding(gen_dl)
+        print(self.real_embed.shape, self.gen_embed.shape)
 
     def _to_embeddding(self, x):
         embed = self.inceptionv3(x.detach())
@@ -80,30 +82,17 @@ class Evaluator(object):
         return embed
 
     @torch.no_grad()
-    def get_real_embedding(self):
+    def get_embedding(self, dl):
         embeds = list()
-        di = iter(self.real_dl)
-        for _ in tqdm(range(math.ceil(self.n_eval_imgs // self.batch_size))):
+        di = iter(dl)
+        for _ in tqdm(range(math.ceil(self.n_eval_imgs / self.batch_size))):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
             embed = self._to_embeddding(x0)
             embeds.append(embed)
-        real_embed = np.concatenate(embeds)[: self.n_eval_imgs]
-        return real_embed
-
-    @torch.no_grad()
-    def get_generated_embedding(self):
-        embeds = list()
-        di = iter(self.real_dl)
-        for _ in tqdm(range(math.ceil(self.n_eval_imgs // self.batch_size))):
-            x0 = next(di)
-            _, self.n_channels, self.img_size, _ = x0.shape
-            x0 = x0.to(self.device)
-            embed = self._to_embeddding(x0)
-            embeds.append(embed)
-        gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
-        return gen_embed
+        cocat_embed = np.concatenate(embeds)[: self.n_eval_imgs]
+        return cocat_embed
 
     def evaluate(self):
         fid = get_fid(self.real_embed, self.gen_embed)
@@ -126,6 +115,8 @@ if __name__ == "__main__":
     gen_ds = ImageGridDataset(
         data_dir=CONFIG["GEN_DATA_DIR"],
         img_size=CONFIG["IMG_SIZE"],
+        n_cells=CONFIG["N_CELLS"],
+        padding=CONFIG["PADDING"],
     )
     gen_dl = DataLoader(
         gen_ds,
