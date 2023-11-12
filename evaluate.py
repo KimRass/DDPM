@@ -31,10 +31,10 @@ def get_args():
 
 
 def get_matrix_sqrt(x):
-    sqrtm = scipy.linalg.sqrtm(x)
-    if np.iscomplexobj(sqrtm):
-       sqrtm = sqrtm.real
-    return sqrtm
+    conv_mean = scipy.linalg.sqrtm(x)
+    if np.iscomplexobj(conv_mean):
+       conv_mean = conv_mean.real
+    return conv_mean
 
 
 def get_mean_and_cov(embed):
@@ -44,16 +44,16 @@ def get_mean_and_cov(embed):
 
 
 def get_frechet_distance(mu1, mu2, sigma1, sigma2):
-    cov_product = get_matrix_sqrt(sigma1 @ sigma2)
-    fd = ((mu1 - mu2) ** 2).sum() - np.trace(sigma1 + sigma2 - 2 * cov_product)
+    cov_mean = get_matrix_sqrt(sigma1 @ sigma2)
+    fd = ((mu1 - mu2) ** 2).sum() + np.trace(sigma1 + sigma2 - 2 * cov_mean)
     return fd.item()
 
 
 def get_fid(embed1, embed2):
-    print(embed1.shape, embed2.shape)
+    embed1 = np.random.random(10*2048).reshape((10,2048))
+    embed2 = np.random.random(10*2048).reshape((10,2048))
     mu1, sigma1 = get_mean_and_cov(embed1)
     mu2, sigma2 = get_mean_and_cov(embed2)
-    print(mu1.shape, sigma1.shape)
     fd = get_frechet_distance(mu1=mu1, mu2=mu2, sigma1=sigma1, sigma2=sigma2)
     return fd
 
