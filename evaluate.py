@@ -50,8 +50,10 @@ def get_frechet_distance(mu1, mu2, sigma1, sigma2):
 
 
 def get_fid(embed1, embed2):
+    print(embed1.shape, embed2.shape)
     mu1, sigma1 = get_mean_and_cov(embed1)
     mu2, sigma2 = get_mean_and_cov(embed2)
+    print(mu1.shape, sigma1.shape)
     fd = get_frechet_distance(mu1=mu1, mu2=mu2, sigma1=sigma1, sigma2=sigma2)
     return fd
 
@@ -72,6 +74,7 @@ class Evaluator(object):
 
         self.real_embed = self.get_real_embedding()
         self.gen_embed = self.get_generated_embedding()
+        print(self.real_embed.shape, self.gen_embed.shape)
 
     def _to_embeddding(self, x):
         embed = self.inceptionv3(x.detach())
