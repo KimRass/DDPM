@@ -15,7 +15,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-def fid_inception_v3():
+def fid_inceptionv3():
     # Inception weights ported to Pytorch from
     # http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz
     FID_WEIGHTS_URL = "https://github.com/mseitzer/pytorch-fid/releases/download/fid_weights/pt_inception-2015-12-05-6726825d.pth"
@@ -191,7 +191,7 @@ class InceptionV3(nn.Module):
         self.blocks = nn.ModuleList()
 
         if use_fid_inception:
-            inception = fid_inception_v3()
+            inception = fid_inceptionv3()
         else:
             inception = inception_v3(weights=Inception_V3_Weights.DEFAULT)
 
@@ -238,20 +238,6 @@ class InceptionV3(nn.Module):
             self.blocks.append(nn.Sequential(*block3))
 
     def forward(self, x):
-        """Get Inception feature maps
-
-        Parameters
-        ----------
-        x : torch.autograd.Variable
-            Input tensor of shape Bx3xHxW. Values are expected to be in
-            range (0, 1)
-
-        Returns
-        -------
-        List of torch.autograd.Variable, corresponding to the selected output
-        block, sorted ascending by index
-        """
-        # out = list()
         if self.resize_input:
             x = F.interpolate(x, size=(299, 299), mode="bilinear", align_corners=False)
 
@@ -261,16 +247,11 @@ class InceptionV3(nn.Module):
         for idx, block in enumerate(self.blocks):
             x = block(x)
             if idx in self.output_blocks:
-                # out.append(x)
                 return x
-
-        #     if idx == self.last_needed_block:
-        #         break
-        # return out
 
 
 if __name__ == "__main__":
     model = InceptionV3()
     x = torch.randn(4, 3, 256, 256)
     out = model(x)
-    out.shape # `(4, 2048, 1, 1)`
+    out.shape

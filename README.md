@@ -137,3 +137,4 @@ $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\big
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 - https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
 - https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence
+- https://junia3.github.io/blog/DDPMproof

@@ -40,3 +40,34 @@ class CelebADataset(Dataset):
         image = Image.open(self.img_paths[idx]).convert("RGB")
         image = self.transformer(image)
         return image
+
+
+class ImageGridDataset(Dataset):
+    def __init__(self, data_dir, img_size, padding=1, n_cells=100):
+        super().__init__()
+
+        self.img_paths = sorted(list(Path(data_dir).glob("**/*.jpg")))
+        self.img_size = img_size
+        self.padding = padding
+        self.n_cells = n_cells
+
+        self.transformer = T.Compose(
+            [T.ToTensor(), T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))],
+        )
+
+    def __len__(self):
+        return len(self.img_paths) * self.n_cells
+
+    def _idx_to_dimension(self, idx):
+        return self.padding * (idx + 1) + self.img_size * idx
+
+    def __getitem__(self, idx):
+        image = Image.open(self.img_paths[idx // self.n_cells]).convert("RGB")
+        image = self.transformer(image)
+        row_idx = (idx % self.n_cells) // int((self.n_cells ** 0.5))
+        col_idx = (idx % self.n_cells) % int((self.n_cells ** 0.5))
+        return image[
+            :,
+            self._idx_to_dimension(row_idx): self._idx_to_dimension(row_idx) + self.img_size,
+            self._idx_to_dimension(col_idx): self._idx_to_dimension(col_idx) + self.img_size,
+        ]
