@@ -49,7 +49,7 @@ $$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \
     - Trained on CelebA dataset for 29 epochs
 - [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
-    - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.25
+    - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.28
 ## Image Generation
 ### `"normal"` mode
 ```bash

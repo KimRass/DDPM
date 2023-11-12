@@ -1,6 +1,5 @@
 # References:
     # https://wandb.ai/wandb_fc/korean/reports/-Frechet-Inception-distance-FID-GANs---Vmlldzo0MzQ3Mzc
-    # https://github.com/w86763777/pytorch-ddpm/blob/master/score/fid.py
 
 import torch
 from torch.utils.data import DataLoader
