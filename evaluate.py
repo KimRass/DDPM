@@ -92,7 +92,7 @@ class Evaluator(object):
         return real_embed
 
     @torch.no_grad()
-    def get_real_embedding(self):
+    def get_generated_embedding(self):
         embeds = list()
         di = iter(self.real_dl)
         for _ in range(math.ceil(self.n_eval_imgs // self.batch_size)):
