@@ -71,6 +71,7 @@ class Evaluator(object):
         self.inceptionv3.eval()
 
         self.real_embed = self.get_real_embedding()
+        self.gen_embed = self.get_generated_embedding()
 
     def _to_embeddding(self, x):
         embed = self.inceptionv3(x.detach())
@@ -82,7 +83,7 @@ class Evaluator(object):
     def get_real_embedding(self):
         embeds = list()
         di = iter(self.real_dl)
-        for _ in range(math.ceil(self.n_eval_imgs // self.batch_size)):
+        for _ in tqdm(range(math.ceil(self.n_eval_imgs // self.batch_size))):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
@@ -95,7 +96,7 @@ class Evaluator(object):
     def get_generated_embedding(self):
         embeds = list()
         di = iter(self.real_dl)
-        for _ in range(math.ceil(self.n_eval_imgs // self.batch_size)):
+        for _ in tqdm(range(math.ceil(self.n_eval_imgs // self.batch_size))):
             x0 = next(di)
             _, self.n_channels, self.img_size, _ = x0.shape
             x0 = x0.to(self.device)
@@ -104,27 +105,8 @@ class Evaluator(object):
         gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
         return gen_embed
 
-    # @torch.no_grad()
-    # def get_generated_embedding(self):
-    #     print("Calculating embeddings for synthetic data distribution...")
-
-    #     embeds = list()
-    #     for _ in tqdm(range(math.ceil(self.n_eval_imgs // self.batch_size))):
-    #         x0 = self.ddpm.sample(
-    #             batch_size=self.batch_size,
-    #             n_channels=self.n_channels,
-    #             img_size=self.img_size,
-    #             device=self.device,
-    #             to_image=False,
-    #         )
-    #         embed = self._to_embeddding(x0)
-    #         embeds.append(embed)
-    #     synth_embed = np.concatenate(embeds)[: self.n_eval_imgs]
-    #     return synth_embed
-
     def evaluate(self):
-        synth_embed = self.get_generated_embedding()
-        fid = get_fid(self.real_embed, synth_embed)
+        fid = get_fid(self.real_embed, self.gen_embed)
         return fid
 
 
