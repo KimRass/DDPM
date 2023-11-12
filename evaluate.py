@@ -23,7 +23,7 @@ def get_args():
     parser.add_argument("--real_data_dir", type=str, required=True)
     parser.add_argument("--gen_data_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
-    parser.add_argument("--n_imgs", type=int, required=True)
+    parser.add_argument("--n_eval_imgs", type=int, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
 
     args = parser.parse_args()
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     evaluator = Evaluator(
         ddpm=ddpm,
-        n_samples=CONFIG["N_EVAL_IMAGES"],
+        n_samples=CONFIG["N_EVAL_IMGS"],
         real_dl=real_dl,
         gen_dl=gen_dl,
         device=CONFIG["DEVICE"],
