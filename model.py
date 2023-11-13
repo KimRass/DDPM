@@ -183,7 +183,7 @@ class UNet(nn.Module):
 
         self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
         self.downblocks = nn.ModuleList()
-        chs = [ch]  # record output channel when dowmsample for upsample
+        cxs = [ch]  # record output channel when dowmsample for upsample
         now_ch = ch
         for i, mult in enumerate(ch_mult):
             out_ch = ch * mult
@@ -192,10 +192,10 @@ class UNet(nn.Module):
                     in_ch=now_ch, out_ch=out_ch, tdim=tdim,
                     dropout=dropout, attn=(i in attn)))
                 now_ch = out_ch
-                chs.append(now_ch)
+                cxs.append(now_ch)
             if i != len(ch_mult) - 1:
                 self.downblocks.append(DownSample(now_ch))
-                chs.append(now_ch)
+                cxs.append(now_ch)
 
         self.middleblocks = nn.ModuleList([
             ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
@@ -207,12 +207,12 @@ class UNet(nn.Module):
             out_ch = ch * mult
             for _ in range(num_res_blocks + 1):
                 self.upblocks.append(ResBlock(
-                    in_ch=chs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
+                    in_ch=cxs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
                     dropout=dropout, attn=(i in attn)))
                 now_ch = out_ch
             if i != 0:
                 self.upblocks.append(UpSample(now_ch))
-        assert len(chs) == 0
+        assert len(cxs) == 0
 
         self.tail = nn.Sequential(
             nn.GroupNorm(32, now_ch),
@@ -231,23 +231,26 @@ class UNet(nn.Module):
         # Timestep embedding
         temb = self.time_embedding(t)
         # Downsampling
-        h = self.head(x)
-        hs = [h]
+        x = self.head(x)
+        xs = [x]
         for layer in self.downblocks:
-            h = layer(h, temb)
-            hs.append(h)
+            x = layer(x, temb)
+            xs.append(x)
         # Middle
         for layer in self.middleblocks:
-            h = layer(h, temb)
+            x = layer(x, temb)
         # Upsampling
         for layer in self.upblocks:
             if isinstance(layer, ResBlock):
-                h = torch.cat([h, hs.pop()], dim=1)
-            h = layer(h, temb)
-        h = self.tail(h)
+                x = torch.cat([x, xs.pop()], dim=1)
 
-        assert len(hs) == 0
-        return h
+            if isinstance(layer, UpSample):
+                x = layer(x)
+            else:
+                x = layer(x, temb)
+        x = self.tail(x)
+        assert len(xs) == 0
+        return x
 
 
 if __name__ == "__main__":

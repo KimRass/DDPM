@@ -6,12 +6,15 @@ import torch.nn as nn
 import numpy as np
 import imageio
 from tqdm import tqdm
+import math
+from pathlib import Path
 
 from utils import (
     sample_noise,
     index,
     image_to_grid,
     get_linear_beta_schdule,
+    save_image,
 )
 from model import UNet
 
@@ -136,3 +139,15 @@ class DDPM(nn.Module):
         x = torch.cat(rows, dim=0)
         image = image_to_grid(x, n_cols=n + 2)
         return image
+
+    def sample_eval_images(self, n_eval_imgs, batch_size, n_channels, img_size, save_dir, device):
+        for idx in tqdm(range(1, math.ceil(n_eval_imgs / batch_size) + 1)):
+            gen_image = self.sample(
+                batch_size=batch_size,
+                n_channels=n_channels,
+                img_size=img_size,
+                device=device,
+            )
+            save_image(
+                gen_image, path=Path(save_dir)/f"""{str(idx).zfill(len(str(n_eval_imgs)))}.jpg""",
+            )
