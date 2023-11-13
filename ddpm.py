@@ -28,7 +28,6 @@ class DDPM(nn.Module):
             init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps,
         )
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
-        # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = self._get_alpha_bar(self.alpha)
 
         self.model = UNet(n_timesteps=n_timesteps)
@@ -83,7 +82,7 @@ class DDPM(nn.Module):
         self.model.train()
         return model_mean
 
-    def sample(self, batch_size, n_channels, img_size, device, to_image=True): # Reverse process
+    def sample(self, batch_size, n_channels, img_size, device, to_image=True): # Reverse (denoising) process
         x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
         for timestep in range(self.n_timesteps - 1, -1, -1):
             x = self._sample_from_p(x, timestep=timestep)

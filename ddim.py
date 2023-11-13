@@ -5,6 +5,7 @@
 from typing import Optional, List
 import numpy as np
 import torch
+from labml import monit
 
 from utils import (
     sample_noise,
@@ -120,99 +121,52 @@ class DiffusionSampler:
 
 
 class DDIM(DiffusionSampler):
-    def __init__(self, model, n_timesteps, init_beta, fin_beta, ddim_eta=0):
+    def __init__(self, model, n_ddim_timesteps, init_beta, fin_beta, ddim_eta=0):
         super().__init__(model)
         # Number of steps, $T$
-        self.model_n_timesteps = model.n_steps
-
-        self.time_steps = np.asarray(
-            list(range(0, self.model_n_timesteps, self.model_n_timesteps // n_timesteps))
-        ) + 1
-
-        self.n_timesteps = n_timesteps
+        self.n_ddim_timesteps = n_ddim_timesteps
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
+        self.n_timesteps = model.n_steps
+
+        self.timesteps = np.asarray(
+            list(range(0, self.n_timesteps, self.n_timesteps // n_ddim_timesteps))
+        ) + 1
+
         self.beta = get_linear_beta_schdule(
-            init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps,
+            init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_ddim_timesteps,
         )
-        self.alpha = 1 - self.beta
+        # self.alpha = 1 - self.beta
+        alpha_bar = self._get_alpha_bar(self.alpha)
         self.alpha_bar = self._get_alpha_bar(self.alpha)
 
         with torch.no_grad():
-            alpha_bar = self.model.alpha_bar
+            self.alpha_bar = alpha_bar[self.timesteps].clone().to(torch.float32)
+            self.alpha_bar_prev = torch.cat([alpha_bar[: 1], alpha_bar[self.timesteps[:-1]]])
 
-            # $\alpha_{\tau_i}$
-            self.alpha = alpha_bar[self.time_steps].clone().to(torch.float32)
-            # $\sqrt{\alpha_{\tau_i}}$
-            self.ddim_alpha_sqrt = torch.sqrt(self.alpha)
-            # $\alpha_{\tau_{i-1}}$
-            self.ddim_alpha_prev = torch.cat([alpha_bar[0:1], alpha_bar[self.time_steps[:-1]]])
+            self.ddim_sigma = ddim_eta
+            self.ddim_sigma *= ((1 - self.alpha_bar_prev) / (1 - self.alpha_bar)) ** 0.5
+            self.ddim_sigma *= (1 - self.alpha_bar / self.alpha_bar_prev) ** 0.5
 
-            # $$\sigma_{\tau_i} =
-            # \eta \sqrt{\frac{1 - \alpha_{\tau_{i-1}}}{1 - \alpha_{\tau_i}}}
-            # \sqrt{1 - \frac{\alpha_{\tau_i}}{\alpha_{\tau_{i-1}}}}$$
-            self.ddim_sigma = (ddim_eta *
-                               ((1 - self.ddim_alpha_prev) / (1 - self.alpha) *
-                                (1 - self.alpha / self.ddim_alpha_prev)) ** .5)
-
-            # $\sqrt{1 - \alpha_{\tau_i}}$
-            self.ddim_sqrt_one_minus_alpha = (1. - self.alpha) ** .5
+            # self.sqrt_1m_alpha_bar = (1 - self.alpha_bar) ** 0.5
 
     def _get_alpha_bar(self, alpha):
+        # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         return torch.cumprod(alpha, dim=0)
 
-    @torch.no_grad()
-    def sample(self,
-               shape: List[int],
-               cond: torch.Tensor,
-               repeat_noise: bool = False,
-               temperature: float = 1.,
-               x_last: Optional[torch.Tensor] = None,
-               uncond_scale: float = 1.,
-               uncond_cond: Optional[torch.Tensor] = None,
-               skip_steps: int = 0,
-               ):
-        """
-        ### Sampling Loop
+    def _q(self, t):
+        alpha_bar_t = index(self.alpha_bar.to(t.device), t=t)
+        mean = (alpha_bar_t ** 0.5)
+        var = 1 - alpha_bar_t
+        return mean, var
 
-        :param shape: is the shape of the generated images in the
-            form `[batch_size, channels, height, width]`
-        :param cond: is the conditional embeddings $c$
-        :param temperature: is the noise temperature (random noise gets multiplied by this)
-        :param x_last: is $x_{\tau_S}$. If not provided random noise will be used.
-        :param uncond_scale: is the unconditional guidance scale $s$. This is used for
-            $\epsilon_\theta(x_t, c) = s\epsilon_\text{cond}(x_t, c) + (s - 1)\epsilon_\text{cond}(x_t, c_u)$
-        :param uncond_cond: is the conditional embedding for empty prompt $c_u$
-        :param skip_steps: is the number of time steps to skip $i'$. We start sampling from $S - i'$.
-            And `x_last` is then $x_{\tau_{S - i'}}$.
-        """
-
-        # Get device and batch size
-        device = self.model.device
-        bs = shape[0]
-
-        # Get $x_{\tau_S}$
-        x = x_last if x_last is not None else torch.randn(shape, device=device)
-
-        # Time steps to sample at $\tau_{S - i'}, \tau_{S - i' - 1}, \dots, \tau_1$
-        time_steps = np.flip(self.time_steps)[skip_steps:]
-
-        for i, step in monit.enum('Sample', time_steps):
-            # Index $i$ in the list $[\tau_1, \tau_2, \dots, \tau_S]$
-            index = len(time_steps) - i - 1
-            # Time step $\tau_i$
-            ts = x.new_full((bs,), step, dtype=torch.long)
-
-            # Sample $x_{\tau_{i-1}}$
-            x, pred_x0, e_t = self.p_sample(x, cond, ts, step, index=index,
-                                            repeat_noise=repeat_noise,
-                                            temperature=temperature,
-                                            uncond_scale=uncond_scale,
-                                            uncond_cond=uncond_cond)
-
-        # Return $x_0$
-        return x
+    def _sample_from_q(self, x0, t, eps):
+        b, c, h, _ = x0.shape
+        if eps is None:
+            eps = sample_noise(batch_size=b, n_channels=c, img_size=h, device=x0.device)
+        mean, var = self._q(t)
+        return mean * x0 + (var ** 0.5) * eps
 
     @torch.no_grad()
     def p_sample(self, x: torch.Tensor, c: torch.Tensor, t: torch.Tensor, step: int, index: int, *,
@@ -236,17 +190,73 @@ class DDIM(DiffusionSampler):
         """
 
         # Get $\epsilon_\theta(x_{\tau_i})$
-        e_t = self.get_eps(x, t, c,
-                           uncond_scale=uncond_scale,
-                           uncond_cond=uncond_cond)
+        e_t = self.get_eps(x, t, c, uncond_scale=uncond_scale, uncond_cond=uncond_cond)
 
         # Calculate $x_{\tau_{i - 1}}$ and predicted $x_0$
-        x_prev, pred_x0 = self.get_x_prev_and_pred_x0(e_t, index, x,
-                                                      temperature=temperature,
-                                                      repeat_noise=repeat_noise)
-
-        #
+        x_prev, pred_x0 = self.get_x_prev_and_pred_x0(
+            e_t,
+            index,
+            x,
+            temperature=temperature,
+            repeat_noise=repeat_noise,
+        )
         return x_prev, pred_x0, e_t
+
+    @torch.no_grad()
+    def sample(
+        self,
+        shape: List[int],
+        cond: torch.Tensor,
+        repeat_noise: bool = False,
+        temperature: float = 1.,
+        x_last: Optional[torch.Tensor] = None,
+        uncond_scale: float = 1.,
+        uncond_cond: Optional[torch.Tensor] = None,
+        skip_steps: int = 0,
+    ):
+        """
+        :param cond: is the conditional embeddings $c$
+        :param temperature: is the noise temperature (random noise gets multiplied by this)
+        :param x_last: is $x_{\tau_S}$. If not provided random noise will be used.
+        :param uncond_scale: is the unconditional guidance scale $s$. This is used for
+            $\epsilon_\theta(x_t, c) = s\epsilon_\text{cond}(x_t, c) + (s - 1)\epsilon_\text{cond}(x_t, c_u)$
+        :param uncond_cond: is the conditional embedding for empty prompt $c_u$
+        :param skip_steps: is the number of time steps to skip $i'$. We start sampling from $S - i'$.
+            And `x_last` is then $x_{\tau_{S - i'}}$.
+        """
+
+        device = self.model.device
+        bs = shape[0]
+
+        # Get $x_{\tau_S}$
+        # x = x_last if x_last is not None else torch.randn(shape, device=device)
+        x = x_last if x_last is not None else sample_noise(*shape, device=device)
+
+        # Time steps to sample at $\tau_{S - i'}, \tau_{S - i' - 1}, \dots, \tau_1$
+        timesteps = np.flip(self.timesteps)[skip_steps:]
+
+        for i, step in enumerate(timesteps):
+        # for i, step in monit.enum('Sample', timesteps):
+            # Index $i$ in the list $[\tau_1, \tau_2, \dots, \tau_S]$
+            index = len(timesteps) - i - 1
+            # Time step $\tau_i$
+            ts = x.new_full((bs,), step, dtype=torch.long)
+
+            # Sample $x_{\tau_{i-1}}$
+            x, pred_x0, e_t = self.p_sample(
+                x,
+                cond,
+                ts,
+                step,
+                index=index,
+                repeat_noise=repeat_noise,
+                temperature=temperature,
+                uncond_scale=uncond_scale,
+                uncond_cond=uncond_cond,
+            )
+
+        # Return $x_0$
+        return x
 
     def get_x_prev_and_pred_x0(self, e_t: torch.Tensor, index: int, x: torch.Tensor, *,
                                temperature: float,
@@ -258,11 +268,11 @@ class DDIM(DiffusionSampler):
         # $\alpha_{\tau_i}$
         alpha = self.alpha[index]
         # $\alpha_{\tau_{i-1}}$
-        alpha_prev = self.ddim_alpha_prev[index]
+        alpha_prev = self.alpha_bar_prev[index]
         # $\sigma_{\tau_i}$
         sigma = self.ddim_sigma[index]
         # $\sqrt{1 - \alpha_{\tau_i}}$
-        sqrt_one_minus_alpha = self.ddim_sqrt_one_minus_alpha[index]
+        sqrt_one_minus_alpha = self.sqrt_1m_alpha_bar[index]
 
         # Current prediction for $x_0$,
         # $$\frac{x_{\tau_i} - \sqrt{1 - \alpha_{\tau_i}}\epsilon_\theta(x_{\tau_i})}{\sqrt{\alpha_{\tau_i}}}$$
@@ -316,7 +326,7 @@ class DDIM(DiffusionSampler):
         # Sample from
         #  $$q_{\sigma,\tau}(x_t|x_0) =
         #          \mathcal{N} \Big(x_t; \sqrt{\alpha_{\tau_i}} x_0, (1-\alpha_{\tau_i}) \mathbf{I} \Big)$$
-        return self.ddim_alpha_sqrt[index] * x0 + self.ddim_sqrt_one_minus_alpha[index] * noise
+        return self.sqrt_alpha_bar[index] * x0 + self.sqrt_1m_alpha_bar[index] * noise
 
     @torch.no_grad()
     def paint(self, x: torch.Tensor, cond: torch.Tensor, t_start: int, *,
@@ -343,11 +353,12 @@ class DDIM(DiffusionSampler):
         bs = x.shape[0]
 
         # Time steps to sample at $\tau_{S`}, \tau_{S' - 1}, \dots, \tau_1$
-        time_steps = np.flip(self.time_steps[:t_start])
+        timesteps = np.flip(self.timesteps[:t_start])
 
-        for i, step in monit.enum('Paint', time_steps):
+        # for i, step in monit.enum('Paint', timesteps):
+        for i, step in enumerate(timesteps):
             # Index $i$ in the list $[\tau_1, \tau_2, \dots, \tau_S]$
-            index = len(time_steps) - i - 1
+            index = len(timesteps) - i - 1
             # Time step $\tau_i$
             ts = x.new_full((bs,), step, dtype=torch.long)
 
