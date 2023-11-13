@@ -91,6 +91,7 @@ python3 generate_image.py
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/b7cb4e24-854d-4d47-8087-b1b4acf7f58b" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/88d32ee4-3155-4009-9796-e3c00fda9bc1" width="700">
 ### `"coarse_to_fine"` mode
+- Please refer to "Figure 9" in the paper for the meaning of each row and column.
 ```bash
 # e.g.,
 python3 generate_image.py

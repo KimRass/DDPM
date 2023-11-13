@@ -16,12 +16,6 @@ from utils import (
 from model import UNet
 
 
-def _get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
-    # "We set the forward process variances to constants increasing linearly."
-    # return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
-    return torch.linspace(init_beta, fin_beta, n_timesteps + 1) # "$\beta_{t}$"
-
-
 class DDPM(nn.Module):
     def __init__(self, n_timesteps=1000, init_beta=0.0001, fin_beta=0.02):
         super().__init__()
