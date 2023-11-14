@@ -28,12 +28,15 @@ from ddim import DDIM
 def get_args():
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("--mode", type=str, required=False, default="ddim", choices=["ddpm", "ddim"])
+
     parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=False, default=0)
+
     parser.add_argument("--torch_compile", action="store_true", required=False)
 
     args = parser.parse_args()
@@ -48,25 +51,25 @@ def init_wandb(run_id, img_size):
     print(wandb.config)
 
 
-def train_single_step(x0, ddpm, optim, scaler, crit, config):
+def train_single_step(x0, dm, optim, scaler, crit, config):
     x0 = x0.to(config["DEVICE"])
 
     t = sample_t(
         n_timesteps=config["N_TIMESTEPS"], batch_size=config["BATCH_SIZE"], device=config["DEVICE"],
-    ) # "$t \sim Uniform({1, \ldots, T})$"
+    ) # ["Algorithm 1"] "3: $t \sim Uniform(\{1, \ldots, T\})$"
     eps = sample_noise(
         batch_size=config["BATCH_SIZE"],
         n_channels=config["N_CHANNELS"],
         img_size=config["IMG_SIZE"],
         device=config["DEVICE"],
-    ) # "$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
+    ) # ["Algorithm 1"] "4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
 
     with torch.autocast(
         device_type=config["DEVICE"].type,
         dtype=torch.float16 if config["DEVICE"].type == "cuda" else torch.bfloat16,
     ):
-        noisy_image = ddpm(x0, t=t, eps=eps)
-        pred_eps = ddpm.predict_noise(x=noisy_image, t=t)
+        noisy_image = dm(x0, t=t, eps=eps)
+        pred_eps = dm.predict_noise(x=noisy_image, t=t)
         loss = crit(pred_eps, eps)
 
     optim.zero_grad()
@@ -80,38 +83,22 @@ def train_single_step(x0, ddpm, optim, scaler, crit, config):
     return loss
 
 
-# def save_checkpoint(epoch, ddpm, scaler, optim, loss, save_path):
-# # def save_checkpoint(ddpm, save_path):
-#     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-#     state_dict = {
-#         "epoch": epoch,
-#         "ddpm": modify_state_dict(ddpm.state_dict()),
-#         "scaler": scaler.state_dict(),
-#         "optimizer": optim.state_dict(),
-#         "loss": loss,
-#     }
-#     torch.save(state_dict, str(save_path))
-#     # torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
-#     wandb.save(str(save_path), base_path=Path(save_path).parent)
-
-
-def save_wandb_checkpoint(epoch, ddpm, scaler, optim, loss, save_path):
+def save_wandb_checkpoint(epoch, dm, scaler, optim, loss, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
     state_dict = {
         "epoch": epoch,
-        "ddpm": modify_state_dict(ddpm.state_dict()),
+        "diffusion_model": modify_state_dict(dm.state_dict()),
         "scaler": scaler.state_dict(),
         "optimizer": optim.state_dict(),
         "loss": loss,
     }
     torch.save(state_dict, str(save_path))
-    # torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
     wandb.save(str(save_path), base_path=Path(save_path).parent)
 
 
-def save_ddpm(ddpm, save_path):
+def save_diffusion_model(dm, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(modify_state_dict(ddpm.state_dict()), str(save_path))
+    torch.save(modify_state_dict(dm.state_dict()), str(save_path))
 
 
 def get_tain_dl(data_dir, img_size, batch_size, n_cpus):
@@ -141,29 +128,30 @@ if __name__ == "__main__":
         n_cpus=CONFIG["N_CPUS"],
     )
 
-    # ddpm = DDPM(
-    #     n_timesteps=CONFIG["N_TIMESTEPS"],
-    #     init_beta=CONFIG["INIT_BETA"],
-    #     fin_beta=CONFIG["FIN_BETA"],
-    # ).to(CONFIG["DEVICE"])
-    ddpm = DDIM(
-        n_timesteps=CONFIG["N_TIMESTEPS"],
-        n_ddim_timesteps=CONFIG["N_DDIM_TIMESTEPS"],
-        init_beta=CONFIG["INIT_BETA"],
-        fin_beta=CONFIG["FIN_BETA"],
-    ).to(CONFIG["DEVICE"])
+    if CONFIG["MODE"] == "ddim":
+        dm = DDIM(
+            n_timesteps=CONFIG["N_TIMESTEPS"],
+            n_ddim_timesteps=CONFIG["N_DDIM_TIMESTEPS"],
+            init_beta=CONFIG["INIT_BETA"],
+            fin_beta=CONFIG["FIN_BETA"],
+        ).to(CONFIG["DEVICE"])
+    else:
+        dm = DDPM(
+            n_timesteps=CONFIG["N_TIMESTEPS"],
+            init_beta=CONFIG["INIT_BETA"],
+            fin_beta=CONFIG["FIN_BETA"],
+        ).to(CONFIG["DEVICE"])
     if CONFIG["TORCH_COMPILE"]:
-        ddpm = torch.compile(ddpm)
-    optim = Adam(ddpm.parameters(), lr=CONFIG["LR"])
+        dm = torch.compile(dm)
+    optim = Adam(dm.parameters(), lr=CONFIG["LR"])
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
     crit = nn.MSELoss(reduction="mean")
 
     if wandb.run.resumed:
-        # state_dict = torch.load(str(CONFIG["WANDB_CKPT_PATH"]), map_location=CONFIG["DEVICE"])
         state_dict = torch.load(
             str(wandb.restore(CONFIG["WANDB_CKPT_PATH"])), map_location=CONFIG["DEVICE"],
         )
-        ddpm.load_state_dict(state_dict["ddpm"])
+        dm.load_state_dict(state_dict["diffusion_model"])
         optim.load_state_dict(state_dict["optimizer"])
         scaler.load_state_dict(state_dict["scaler"])
         init_epoch = state_dict["epoch"]
@@ -175,19 +163,20 @@ if __name__ == "__main__":
 
     n_cols = int(CONFIG["BATCH_SIZE"] ** 0.5)
     for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
-        accum_loss = 0
+        cum_loss = 0
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
             loss = train_single_step(
-                x0=x0, ddpm=ddpm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
+                x0=x0, dm=dm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
             )
-            accum_loss += loss.item()
-        cur_loss = cur_loss
+            cum_loss += loss.item()
+        cur_loss = cum_loss / len(train_dl)
+
         if cur_loss < min_loss:
             min_loss = cur_loss
 
-        msg = f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
-        msg += f"[ {get_elapsed_time(start_time)} ]"
+        msg = f"[ {get_elapsed_time(start_time)} ]"
+        msg += f"""[ {epoch}/{CONFIG["N_EPOCHS"]} ]"""
         msg += f"[ Min loss: {min_loss:.5f} ]"
         msg += f"[ Loss: {cur_loss:.5f} ]"
         print(msg)
@@ -195,11 +184,11 @@ if __name__ == "__main__":
         wandb.log({"Min loss": min_loss, "Loss": cur_loss}, step=epoch)
 
         filename = f"""DDIM_{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
-        save_ddpm(ddpm=ddpm, save_path=CONFIG["CKPTS_DIR"]/filename)
+        save_diffusion_model(dm=dm, save_path=CONFIG["CKPTS_DIR"]/filename)
 
         save_wandb_checkpoint(
             epoch=epoch,
-            ddpm=ddpm,
+            dm=dm,
             scaler=scaler,
             optim=optim,
             loss=cur_loss,

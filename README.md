@@ -73,7 +73,7 @@ python3 evaluate.py
     --padding=1\ # Optional
     --n_cells=100 # Optional
 ```
-## Impotant Concepts
+## Theorectical Background
 ### DDPM
 - We define the forward diffusion process $q(x_{t} \vert x_{t - 1})$ which adds Gaussian noise at each time step $t$, according to a known variance schedule $0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$ as
 $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \beta_{t}I)$$
@@ -135,3 +135,6 @@ $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\big
 - https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
 - https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence
 - https://junia3.github.io/blog/DDPMproof
+- https://medium.com/mlearning-ai/understanding-the-diffusion-model-and-the-theory-tensorflow-cafcd5752b98
+- https://wandb.ai/capecape/train_sd/reports/How-To-Train-a-Conditional-Diffusion-Model-From-Scratch--VmlldzoyNzIzNTQ1
+- https://keras.io/examples/generative/ddim/
