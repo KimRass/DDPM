@@ -43,7 +43,7 @@ def get_args():
 def init_wandb(run_id, img_size):
     if run_id is None:
         run_id = wandb.util.generate_id()
-    wandb.init(project="DDPM", resume="allow", id=run_id)
+    wandb.init(project="DDIM", resume="allow", id=run_id)
     wandb.config.update({"IMG_SIZE": img_size})
     print(wandb.config)
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
         wandb.log({"Min loss": min_loss, "Loss": cur_loss}, step=epoch)
 
-        filename = f"""{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
+        filename = f"""DDIM_{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
         save_ddpm(ddpm=ddpm, save_path=CONFIG["CKPTS_DIR"]/filename)
 
         save_wandb_checkpoint(
