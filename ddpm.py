@@ -71,11 +71,11 @@ class DDPM(nn.Module):
         )
         alpha_t = index(self.alpha.to(x.device), t=t)
         alpha_bar_t = index(self.alpha_bar.to(x.device), t=t)
-        eps_theta = self.predict_noise(x.detach(), t=t)
+        pred_noise = self.predict_noise(x.detach(), t=t)
         # # ["Algorithm 2"] "4: $$\mu_{\theta}(x_{t}, t) =
         # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)$$
         # + \sigma_{t}z"
-        model_mean = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * eps_theta)
+        model_mean = (1 / (alpha_t ** 0.5)) * (x - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise)
 
         if timestep > 0:
             beta_t = index(self.beta.to(x.device), t=t)

@@ -22,6 +22,7 @@ from utils import (
 )
 from celeba import CelebADataset
 from ddpm import DDPM
+from ddim import DDIM
 
 
 def get_args():
@@ -140,8 +141,14 @@ if __name__ == "__main__":
         n_cpus=CONFIG["N_CPUS"],
     )
 
-    ddpm = DDPM(
+    # ddpm = DDPM(
+    #     n_timesteps=CONFIG["N_TIMESTEPS"],
+    #     init_beta=CONFIG["INIT_BETA"],
+    #     fin_beta=CONFIG["FIN_BETA"],
+    # ).to(CONFIG["DEVICE"])
+    ddpm = DDIM(
         n_timesteps=CONFIG["N_TIMESTEPS"],
+        n_ddim_timesteps=CONFIG["N_DDIM_TIMESTEPS"],
         init_beta=CONFIG["INIT_BETA"],
         fin_beta=CONFIG["FIN_BETA"],
     ).to(CONFIG["DEVICE"])
