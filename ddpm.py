@@ -15,6 +15,7 @@ from utils import (
     image_to_grid,
     get_linear_beta_schdule,
     save_image,
+    to_batched_timesteps,
 )
 from model import UNet
 
@@ -66,9 +67,7 @@ class DDPM(nn.Module):
         self.model.eval()
 
         b, c, h, _ = x.shape
-        t = torch.full(
-            size=(b,), fill_value=timestep, dtype=torch.long, device=x.device,
-        )
+        t = to_batched_timesteps(timestep=timestep, batch_size=b, device=x.device)
         alpha_t = index(self.alpha.to(x.device), t=t)
         alpha_bar_t = index(self.alpha_bar.to(x.device), t=t)
         pred_noise = self.predict_noise(x.detach(), t=t)
@@ -85,11 +84,11 @@ class DDPM(nn.Module):
         self.model.train()
         return model_mean
 
-    def sample(self, batch_size, n_channels, img_size, device, to_image=True): # Reverse (denoising) process
+    def sample(self, batch_size, n_channels, img_size, device, return_image=True): # Reverse (denoising) process
         x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
         for timestep in range(self.n_timesteps - 1, -1, -1):
             x = self._sample_from_p(x, timestep=timestep)
-        if not to_image:
+        if not return_image:
             return x
 
         image = image_to_grid(x, n_cols=int(batch_size ** 0.5))
@@ -117,8 +116,8 @@ class DDPM(nn.Module):
         lambs = lambs[:, None, None, None].expand(n, b, c, d)
         return ((1 - lambs) * x + lambs * y)
 
-    def interpolate(self, image1, image2, timestep, n=10, to_image=True):
-        t = torch.full(size=(1,), fill_value=timestep)
+    def interpolate(self, image1, image2, timestep, n=10, return_image=True):
+        t = to_batched_timesteps(timestep=timestep, batch_size=1, device=image1.device)
         noisy_image1 = self(image1, t=t)
         noisy_image2 = self(image2, t=t)
 
@@ -126,7 +125,7 @@ class DDPM(nn.Module):
         for timestep in range(timestep - 1, -1, -1):
             x = self._sample_from_p(x, timestep=timestep)
         x = torch.cat([image1, x, image2], dim=0)
-        if not to_image:
+        if not return_image:
             return x
         image = image_to_grid(x, n_cols=n + 2)
         return image
@@ -134,7 +133,7 @@ class DDPM(nn.Module):
     def coarse_to_fine_interpolate(self, image1, image2, n_rows=9, n=10):
         rows = list()
         for timestep in range(self.n_timesteps, -1, - self.n_timesteps // (n_rows - 1)):
-            row = self.interpolate(image1, image2, timestep=timestep, n=n, to_image=False)
+            row = self.interpolate(image1, image2, timestep=timestep, n=n, return_image=False)
             rows.append(row)
         x = torch.cat(rows, dim=0)
         image = image_to_grid(x, n_cols=n + 2)

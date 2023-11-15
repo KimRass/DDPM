@@ -15,6 +15,7 @@ from utils import (
     image_to_grid,
     get_linear_beta_schdule,
     save_image,
+    to_batched_timesteps,
 )
 from model import UNet
 
@@ -68,32 +69,32 @@ class DDIM(nn.Module):
     def _sample_from_p(self, x, timestep):
         self.model.eval()
 
-        b, c, h, _ = x.shape
-        t = torch.full(
-            size=(b,), fill_value=timestep, dtype=torch.long, device=x.device,
-        )
+        b, _, _, _ = x.shape
+        t = to_batched_timesteps(timestep=timestep, batch_size=b, device=x.device)
+        tm1 = to_batched_timesteps(timestep=timestep - self.step_size, batch_size=b, device=x.device)
         alpha_bar_t = index(self.alpha_bar.to(x.device), t=t)
-        tm1 = torch.full(
-            size=(b,), fill_value=timestep - self.step_size, dtype=torch.long, device=x.device,
-        )
         alpha_bar_tm1 = index(self.alpha_bar.to(x.device), t=tm1)
+
         pred_noise = self.predict_noise(x.detach(), t=t)
-        signal = (x - ((1 - alpha_bar_t) ** 0.5) * pred_noise) / (alpha_bar_t ** 0.5)
-        signal_rate = alpha_bar_tm1 ** 0.5
-        noise_rate = (1 - alpha_bar_tm1) ** 0.5
+
+        out = (alpha_bar_tm1 ** 0.5) * (x - ((1 - alpha_bar_t) ** 0.5) * pred_noise) / (alpha_bar_t ** 0.5)
+        out += ((1 - alpha_bar_tm1) ** 0.5) * pred_noise
 
         self.model.train()
-        return signal_rate * signal + noise_rate * pred_noise
+        return out
 
     def sample(
-        self, batch_size, n_channels, img_size, device, to_image=True,
+        self, batch_size, n_channels, img_size, device, return_image=True,
     ): # Reverse (denoising) process
         x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        for timestep in tqdm(range(self.n_timesteps - 1, -1, -self.step_size)):
+        pbar = range(self.n_timesteps - 1, -1, -self.step_size)
+        if device.type == "cpu":
+            pbar = tqdm(pbar)
+        for timestep in pbar:
             x = self._sample_from_p(x=x, timestep=timestep)
-            if timestep - self.step_size < 0:
-                break
-        if not to_image:
+            # if timestep - self.step_size < 0:
+            #     break
+        if not return_image:
             return x
 
         image = image_to_grid(x, n_cols=int(batch_size ** 0.5))
