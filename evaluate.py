@@ -73,6 +73,12 @@ def get_inception_score(prob, eps=1e-16): # $p(y|x)$
     sum_kld = kld.sum(axis=1)
     avg_kld = sum_kld.mean()
     inception_score = np.exp(avg_kld)
+    print(p_yx)
+    print(p_y)
+    print(kld)
+    print(sum_kld)
+    print(avg_kld)
+    print(inception_score)
     return inception_score
 
 
