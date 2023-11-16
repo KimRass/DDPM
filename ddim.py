@@ -1,5 +1,6 @@
 # References:
-    # https://huggingface.co/blog/annotated-diffusion
+    # https://nn.labml.ai/diffusion/stable_diffusion/sampler/ddim.html
+    # https://medium.com/mlearning-ai/understanding-the-diffusion-model-and-the-theory-tensorflow-cafcd5752b98
 
 import torch
 import torch.nn as nn
@@ -21,7 +22,7 @@ from model import UNet
 
 
 class DDIM(nn.Module):
-    def __init__(self, n_timesteps=1000, n_ddim_timesteps=200, init_beta=0.0001, fin_beta=0.02):
+    def __init__(self, n_timesteps=1000, n_ddim_timesteps=250, init_beta=0.0001, fin_beta=0.02):
         super().__init__()
 
         self.n_timesteps = n_timesteps
@@ -31,11 +32,13 @@ class DDIM(nn.Module):
 
         self.step_size = self.n_timesteps // self.n_ddim_timesteps
 
-        self.beta = get_linear_beta_schdule(
+        beta = get_linear_beta_schdule(
             init_beta=init_beta, fin_beta=fin_beta, n_timesteps=n_timesteps,
         )
-        self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
-        self.alpha_bar = self._get_alpha_bar(self.alpha)
+        alpha = 1 - beta # "$\alpha_{t} = 1 - \beta_{t}$")
+        self.alpha_bar = self._get_alpha_bar(alpha)
+        self.alpha_bar = self.alpha_bar[range(1, self.n_timesteps - self.step_size + 2, self.step_size)]
+        # print(self.alpha_bar)
 
         self.model = UNet(n_timesteps=n_timesteps)
 
@@ -66,15 +69,19 @@ class DDIM(nn.Module):
         return self.model(x, t=t)
 
     @torch.no_grad()
-    def _sample_from_p(self, x, timestep):
+    def _sample_from_p(self, x, timestep, idx):
         self.model.eval()
 
         b, _, _, _ = x.shape
-        t = to_batched_timesteps(timestep=timestep, batch_size=b, device=x.device)
-        tm1 = to_batched_timesteps(timestep=timestep - self.step_size, batch_size=b, device=x.device)
-        alpha_bar_t = index(self.alpha_bar.to(x.device), t=t)
-        alpha_bar_tm1 = index(self.alpha_bar.to(x.device), t=tm1)
+        batched_idx = to_batched_timesteps(timestep=idx, batch_size=b, device=x.device)
+        batched_idx_tm1 = to_batched_timesteps(timestep=idx - 1, batch_size=b, device=x.device)
+        # alpha_bar_t = index(self.alpha_bar.to(x.device), t=batched_idx)
+        # alpha_bar_tm1 = index(self.alpha_bar.to(x.device), t=batched_idx_tm1)
+        alpha_bar_t = index(self.alpha_bar.to(x.device), t=batched_idx_tm1)
+        alpha_bar_tm1 = index(self.alpha_bar.to(x.device), t=batched_idx)
 
+        t = to_batched_timesteps(timestep=timestep, batch_size=b, device=x.device)
+        # tm1 = to_batched_timesteps(timestep=timestep - self.step_size, batch_size=b, device=x.device)
         pred_noise = self.predict_noise(x.detach(), t=t)
 
         out = (alpha_bar_tm1 ** 0.5) * (x - ((1 - alpha_bar_t) ** 0.5) * pred_noise) / (alpha_bar_t ** 0.5)
@@ -87,11 +94,15 @@ class DDIM(nn.Module):
         self, batch_size, n_channels, img_size, device, return_image=True,
     ): # Reverse (denoising) process
         x = sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size, device=device)
-        pbar = range(self.n_timesteps - 1, -1, -self.step_size)
+        # pbar = range(self.n_timesteps - 1, -1, -self.step_size)
+        pbar = range(self.n_timesteps - self.step_size + 1, -1, -self.step_size)
         if device.type == "cpu":
             pbar = tqdm(pbar)
-        for timestep in pbar:
-            x = self._sample_from_p(x=x, timestep=timestep)
+        for i, timestep in enumerate(pbar):
+            idx = len(pbar) - i - 1
+            # print(idx)
+            # x = self._sample_from_p(x=x, timestep=timestep)
+            x = self._sample_from_p(x=x, timestep=timestep, idx=idx)
             # if timestep - self.step_size < 0:
             #     break
         if not return_image:
