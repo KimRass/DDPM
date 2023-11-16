@@ -62,11 +62,17 @@ def get_fid(embed1, embed2):
 
 
 def get_inception_score(prob): # $p(y|x)$
+    # from scipy.special import softmax
+    # prob = softmax(np.random.randn(64, 1000), axis=1)
+    # prob.sum(axis=1)
+    print(prob.shape)
+    print(prob.sum(axis=1))
     p_y = np.mean(prob, axis=0) # $p(y)$
     out = prob * np.log(prob / p_y) # $p(y|x)\log(P(y|x) / P(y))$
     out = np.sum(out, axis=1)
     out = np.mean(out, axis=0)
-    return np.exp(out)
+    out = np.exp(out)
+    return out
 
 
 def get_dls(real_data_dir, gen_data_dir, batch_size, img_size, n_cpus, n_cells, padding):
@@ -114,7 +120,6 @@ class Evaluator(object):
         self.model2.eval()
 
         self.process_real_dl()
-        self.process_gen_dl()
 
     @torch.no_grad()
     def process_real_dl(self):
@@ -145,12 +150,14 @@ class Evaluator(object):
             logit = out[1]
             prob = F.softmax(logit, dim=1)
             probs.append(prob.detach().cpu().numpy())
-        self.gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
-        self.gen_prob = np.concatenate(probs)[: self.n_eval_imgs]
+        gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
+        gen_prob = np.concatenate(probs)[: self.n_eval_imgs]
+        return gen_embed, gen_prob
 
     def evaluate(self):
-        fid = get_fid(self.real_embed, self.gen_embed)
-        inception_score = get_inception_score(self.gen_prob)
+        gen_embed, gen_prob = self.process_gen_dl()
+        fid = get_fid(self.real_embed, gen_embed)
+        inception_score = get_inception_score(gen_prob)
         return fid, inception_score
 
 

@@ -5,7 +5,7 @@
     - Trained on CelebA dataset for 29 epochs
 - [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
-    - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.28
+    - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.25
 ## Image Generation
 ### `"normal"` mode
 ```bash
