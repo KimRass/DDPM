@@ -61,24 +61,13 @@ def get_fid(embed1, embed2):
     return fd
 
 
-def get_inception_score(prob, eps=1e-16): # $p(y|x)$
-    # from scipy.special import softmax
-    # prob = softmax(np.random.randn(64, 1000), axis=1)
-    # prob.sum(axis=1)
-    # print(prob.shape)
-    # print(prob.sum(axis=1))
-    p_yx = prob
+def get_inception_score(prob, eps=1e-16):
+    p_yx = prob # $p(y|x)$
     p_y = p_yx.mean(axis=0, keepdims=True) # $p(y)$
     kld = p_yx * np.log((p_yx + eps) / (p_y + eps)) # $p(y|x)\log(P(y|x) / P(y))$
     sum_kld = kld.sum(axis=1)
     avg_kld = sum_kld.mean()
     inception_score = np.exp(avg_kld)
-    print(p_yx)
-    print(p_y)
-    print(kld)
-    print(sum_kld)
-    print(avg_kld)
-    print(inception_score)
     return inception_score
 
 
@@ -110,7 +99,7 @@ def get_dls(real_data_dir, gen_data_dir, batch_size, img_size, n_cpus, n_cells, 
 
 
 class Evaluator(object):
-    def __init__(self, ddpm, n_eval_imgs, batch_size, real_dl, gen_dl, device):
+    def __init__(self, ddpm, n_eval_imgs, batch_size, real_dl, gen_dl, device, mode):
 
         self.ddpm = ddpm
         self.n_eval_imgs = n_eval_imgs
@@ -118,11 +107,15 @@ class Evaluator(object):
         self.real_dl = real_dl
         self.gen_dl = gen_dl
         self.device = device
+        self.mode
 
         self.ddpm.eval()
 
         self.model1 = InceptionV3(output_blocks=[3]).to(device)
-        self.model2 = InceptionV3(output_blocks=[3, 4]).to(device)
+        if mode in ["is", "both"]:
+            self.model2 = InceptionV3(output_blocks=[3, 4]).to(device)
+        else:
+            self.model2 = self.model1
         self.model1.eval()
         self.model2.eval()
 
@@ -154,18 +147,22 @@ class Evaluator(object):
             embed = out[0]
             embeds.append(embed.squeeze().detach().cpu().numpy())
 
-            logit = out[1]
-            prob = F.softmax(logit, dim=1)
-            probs.append(prob.detach().cpu().numpy())
+            if self.mode in ["is", "both"]:
+                logit = out[1]
+                prob = F.softmax(logit, dim=1)
+                probs.append(prob.detach().cpu().numpy())
         gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
-        gen_prob = np.concatenate(probs)[: self.n_eval_imgs]
-        return gen_embed, gen_prob
+        if self.mode in ["is", "both"]:
+            gen_prob = np.concatenate(probs)[: self.n_eval_imgs]
+        return gen_embed, gen_prob if self.mode in ["is", "both"] else gen_embed
 
     def evaluate(self):
         gen_embed, gen_prob = self.process_gen_dl()
         fid = get_fid(self.real_embed, gen_embed)
-        inception_score = get_inception_score(gen_prob)
-        return fid, inception_score
+        print(f"[ FID: {fid:.2f} ]")
+        if self.mode in ["is", "both"]:
+            inception_score = get_inception_score(gen_prob)
+            print(f"[ IS: {inception_score:.2f} ]")
 
 
 if __name__ == "__main__":
