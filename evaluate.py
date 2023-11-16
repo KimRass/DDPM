@@ -193,5 +193,5 @@ if __name__ == "__main__":
         gen_dl=gen_dl,
         device=CONFIG["DEVICE"],
     )
-    fid, inception_score = evaluator.evaluate()
+    fid, inception_score = evaluator.evaluate(mode="fid")
     print(f"[ FID: {fid:.2f} ][ IS: {inception_score:.2f} ]")
