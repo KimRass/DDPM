@@ -99,15 +99,15 @@ def get_dls(real_data_dir, gen_data_dir, batch_size, img_size, n_cpus, n_cells, 
 
 
 class Evaluator(object):
-    def __init__(self, ddpm, n_eval_imgs, batch_size, real_dl, gen_dl, device, mode):
+    def __init__(self, ddpm, n_eval_imgs, batch_size, real_dl, gen_dl, mode, device):
 
         self.ddpm = ddpm
         self.n_eval_imgs = n_eval_imgs
         self.batch_size = batch_size
         self.real_dl = real_dl
         self.gen_dl = gen_dl
+        self.mode = mode
         self.device = device
-        self.mode
 
         self.ddpm.eval()
 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         batch_size=CONFIG["BATCH_SIZE"],
         real_dl=real_dl,
         gen_dl=gen_dl,
+        mode="fid",
         device=CONFIG["DEVICE"],
     )
-    fid, inception_score = evaluator.evaluate(mode="fid")
-    print(f"[ FID: {fid:.2f} ][ IS: {inception_score:.2f} ]")
+    evaluator.evaluate()
