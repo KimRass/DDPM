@@ -1,7 +1,10 @@
 # References:
     # https://wandb.ai/wandb_fc/korean/reports/-Frechet-Inception-distance-FID-GANs---Vmlldzo0MzQ3Mzc
+    # https://m.blog.naver.com/chrhdhkd/222013835684
+    # https://notou10.github.io/deep%20learning/2021/05/31/FID.html
 
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import numpy as np
 import scipy
@@ -58,72 +61,102 @@ def get_fid(embed1, embed2):
     return fd
 
 
+def get_inception_score(prob): # $p(y|x)$
+    p_y = np.mean(prob, axis=0) # $p(y)$
+    out = prob * np.log(prob / p_y) # $p(y|x)\log(P(y|x) / P(y))$
+    out = np.sum(out, axis=1)
+    out = np.mean(out, axis=0)
+    return np.exp(out)
+
+
+def get_dls(real_data_dir, gen_data_dir, batch_size, img_size, n_cpus, n_cells, padding):
+    real_ds = CelebADataset(data_dir=real_data_dir, img_size=img_size)
+    real_dl = DataLoader(
+        real_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=n_cpus,
+        pin_memory=False,
+        drop_last=False,
+    )
+    gen_ds = ImageGridDataset(
+        data_dir=gen_data_dir,
+        img_size=img_size,
+        n_cells=n_cells,
+        padding=padding,
+    )
+    gen_dl = DataLoader(
+        gen_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=n_cpus,
+        pin_memory=False,
+        drop_last=False,
+    )
+    return real_dl, gen_dl
+
+
 class Evaluator(object):
     def __init__(self, ddpm, n_eval_imgs, batch_size, real_dl, gen_dl, device):
 
         self.ddpm = ddpm
-        self.ddpm.eval()
         self.n_eval_imgs = n_eval_imgs
         self.batch_size = batch_size
+        self.real_dl = real_dl
+        self.gen_dl = gen_dl
         self.device = device
 
-        self.inceptionv3 = InceptionV3().to(device)
-        self.inceptionv3.eval()
+        self.ddpm.eval()
 
-        self.real_embed = self.get_embedding(real_dl)
-        self.gen_embed = self.get_embedding(gen_dl)
+        self.model1 = InceptionV3(output_blocks=[3]).to(device)
+        self.model2 = InceptionV3(output_blocks=[3, 4]).to(device)
+        self.model1.eval()
+        self.model2.eval()
 
-    def _to_embeddding(self, x):
-        embed = self.inceptionv3(x.detach())
-        embed = embed.squeeze()
-        embed = embed.cpu().numpy()
-        return embed
+        self.process_real_dl()
+        self.process_gen_dl()
 
     @torch.no_grad()
-    def get_embedding(self, dl):
+    def process_real_dl(self):
         embeds = list()
-        di = iter(dl)
+        gen_di = iter(gen_dl)
         for _ in tqdm(range(math.ceil(self.n_eval_imgs / self.batch_size))):
-            x0 = next(di)
-            _, self.n_channels, self.img_size, _ = x0.shape
+            x0 = next(gen_di)
             x0 = x0.to(self.device)
-            embed = self._to_embeddding(x0)
-            embeds.append(embed)
-        cocat_embed = np.concatenate(embeds)[: self.n_eval_imgs]
-        return cocat_embed
+
+            out = self.model1(x0.detach())
+            embed = out[0]
+            embeds.append(embed.squeeze().detach().cpu().numpy())
+        self.real_embed = np.concatenate(embeds)[: self.n_eval_imgs]
+
+    @torch.no_grad()
+    def process_gen_dl(self):
+        embeds = list()
+        probs = list()
+        real_di = iter(real_dl)
+        for _ in tqdm(range(math.ceil(self.n_eval_imgs / self.batch_size))):
+            x0 = next(real_di)
+            x0 = x0.to(self.device)
+
+            out = self.model2(x0.detach())
+            embed = out[0]
+            embeds.append(embed.squeeze().detach().cpu().numpy())
+
+            logit = out[1]
+            prob = F.softmax(logit, dim=1)
+            probs.append(prob.detach().cpu().numpy())
+        self.gen_embed = np.concatenate(embeds)[: self.n_eval_imgs]
+        self.gen_prob = np.concatenate(probs)[: self.n_eval_imgs]
 
     def evaluate(self):
         fid = get_fid(self.real_embed, self.gen_embed)
-        return fid
+        inception_score = get_inception_score(self.gen_prob)
+        return fid, inception_score
 
 
 if __name__ == "__main__":
     args = get_args()
     CONFIG = get_config(args)
-
-    real_ds = CelebADataset(data_dir=CONFIG["REAL_DATA_DIR"], img_size=CONFIG["IMG_SIZE"])
-    real_dl = DataLoader(
-        real_ds,
-        batch_size=CONFIG["BATCH_SIZE"],
-        shuffle=True,
-        num_workers=CONFIG["N_CPUS"],
-        pin_memory=False,
-        drop_last=False,
-    )
-    gen_ds = ImageGridDataset(
-        data_dir=CONFIG["GEN_DATA_DIR"],
-        img_size=CONFIG["IMG_SIZE"],
-        n_cells=CONFIG["N_CELLS"],
-        padding=CONFIG["PADDING"],
-    )
-    gen_dl = DataLoader(
-        gen_ds,
-        batch_size=CONFIG["BATCH_SIZE"],
-        shuffle=True,
-        num_workers=CONFIG["N_CPUS"],
-        pin_memory=False,
-        drop_last=False,
-    )
 
     ddpm = get_ddpm_from_checkpoint(
         ckpt_path=CONFIG["CKPT_PATH"],
@@ -132,7 +165,15 @@ if __name__ == "__main__":
         fin_beta=CONFIG["FIN_BETA"],
         device=CONFIG["DEVICE"],
     )
-
+    real_dl, gen_dl = get_dls(
+        real_data_dir=CONFIG["REAL_DATA_DIR"],
+        gen_data_dir=CONFIG["GEN_DATA_DIR"],
+        batch_size=CONFIG["BATCH_SIZE"],
+        img_size=CONFIG["IMG_SIZE"],
+        n_cpus=CONFIG["N_CPUS"],
+        n_cells=CONFIG["N_CELLS"],
+        padding=CONFIG["PADDING"],
+    )
     evaluator = Evaluator(
         ddpm=ddpm,
         n_eval_imgs=CONFIG["N_EVAL_IMGS"],
@@ -141,5 +182,5 @@ if __name__ == "__main__":
         gen_dl=gen_dl,
         device=CONFIG["DEVICE"],
     )
-    fid = evaluator.evaluate()
-    print(f"FID: {fid:.2f}")
+    fid, inception_score = evaluator.evaluate()
+    print(f"[ FID: {fid:.2f} ][ IS: {inception_score:.2f} ]")

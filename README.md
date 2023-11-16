@@ -129,6 +129,8 @@ $$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\big
 - For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
 $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
 - where $p$ and $q$ denote the probability densities of $P$ and $Q$.
+### FID (Frechet Inception Distance)
+$$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma_{Y} - 2\sqrt{\Sigma_{X}\Sigma_{Y}}\big)$$
 ## References
 - https://huggingface.co/blog/annotated-diffusion
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
