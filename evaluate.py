@@ -191,7 +191,7 @@ if __name__ == "__main__":
         batch_size=CONFIG["BATCH_SIZE"],
         real_dl=real_dl,
         gen_dl=gen_dl,
-        mode="fid",
+        mode="both",
         device=CONFIG["DEVICE"],
     )
     evaluator.evaluate()
