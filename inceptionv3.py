@@ -111,7 +111,7 @@ class FIDInceptionE_2(InceptionE):
 
 
 def fid_inceptionv3():
-    inception = inception_v3(num_classes=1008, aux_logits=False, init_weights=True)
+    inception = inception_v3(num_classes=1000, aux_logits=False, init_weights=True)
     inception.Mixed_5b = FIDInceptionA(192, pool_features=32)
     inception.Mixed_5c = FIDInceptionA(256, pool_features=64)
     inception.Mixed_5d = FIDInceptionA(288, pool_features=64)
@@ -206,7 +206,6 @@ class InceptionV3(nn.Module):
         for idx, block in enumerate(self.blocks):
             x = block(x)
             if idx in self.output_blocks:
-                # return x
                 outs.append(x)
 
             if idx == self.last_needed_block:

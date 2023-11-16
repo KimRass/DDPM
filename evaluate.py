@@ -61,18 +61,19 @@ def get_fid(embed1, embed2):
     return fd
 
 
-def get_inception_score(prob): # $p(y|x)$
+def get_inception_score(prob, eps=1e-16): # $p(y|x)$
     # from scipy.special import softmax
     # prob = softmax(np.random.randn(64, 1000), axis=1)
     # prob.sum(axis=1)
-    print(prob.shape)
-    print(prob.sum(axis=1))
-    p_y = np.mean(prob, axis=0) # $p(y)$
-    out = prob * np.log(prob / p_y) # $p(y|x)\log(P(y|x) / P(y))$
-    out = np.sum(out, axis=1)
-    out = np.mean(out, axis=0)
-    out = np.exp(out)
-    return out
+    # print(prob.shape)
+    # print(prob.sum(axis=1))
+    p_yx = prob
+    p_y = p_yx.mean(axis=0, keepdims=True) # $p(y)$
+    kld = p_yx * np.log((p_yx + eps) / (p_y + eps)) # $p(y|x)\log(P(y|x) / P(y))$
+    sum_kld = kld.sum(axis=1)
+    avg_kld = sum_kld.mean()
+    inception_score = np.exp(avg_kld)
+    return inception_score
 
 
 def get_dls(real_data_dir, gen_data_dir, batch_size, img_size, n_cpus, n_cells, padding):
