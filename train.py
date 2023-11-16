@@ -117,7 +117,7 @@ def get_tain_dl(data_dir, img_size, batch_size, n_cpus):
 
 if __name__ == "__main__":
     args = get_args()
-    CONFIG = get_config(args)
+    CONFIG = get_config(config_path=Path(__file__).parent/"configs/flickr.yaml", args=args)
     set_seed(CONFIG["SEED"])
     init_wandb(run_id=CONFIG["RUN_ID"], img_size=CONFIG["IMG_SIZE"])
 

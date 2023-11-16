@@ -6,11 +6,11 @@
 - [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
     - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.25, IS: 1.00
-## Image Generation
+## Sampling
 ### `"normal"` mode
 ```bash
 # e.g.,
-python3 generate_image.py\
+python3 sample.py\
     --mode="normal"
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/normal_and_progression/1.jpg"\
@@ -21,7 +21,7 @@ python3 generate_image.py\
 ### `"progression"` mode
 ```bash
 # e.g.,
-python3 generate_image.py\
+python3 sample.py\
     --mode="progression"
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/normal_and_progression/1.gif"\
@@ -31,7 +31,7 @@ python3 generate_image.py\
 ### `"interpolation"` mode
 ```bash
 # e.g.,
-python3 generate_image.py
+python3 sample.py
     --mode="interpolation"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/interpolation/1.jpg"\
@@ -50,7 +50,7 @@ python3 generate_image.py
 - Please refer to "Figure 9" in the paper for the meaning of each row and column.
 ```bash
 # e.g.,
-python3 generate_image.py
+python3 sample.py
     --mode="coarse_to_fine"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/interpolation/1.jpg"\

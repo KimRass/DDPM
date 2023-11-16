@@ -11,10 +11,11 @@ import scipy
 from tqdm import tqdm
 import math
 import argparse
+from pathlib import Path
 
 from utils import get_config
 from inceptionv3 import InceptionV3
-from generate_image import get_ddpm_from_checkpoint
+from sample import get_ddpm_from_checkpoint
 from celeba import CelebADataset, ImageGridDataset
 
 
@@ -167,7 +168,7 @@ class Evaluator(object):
 
 if __name__ == "__main__":
     args = get_args()
-    CONFIG = get_config(args)
+    CONFIG = get_config(config_path=Path(__file__).parent/"configs/flickr.yaml", args=args)
 
     ddpm = get_ddpm_from_checkpoint(
         ckpt_path=CONFIG["CKPT_PATH"],

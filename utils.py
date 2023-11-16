@@ -24,8 +24,8 @@ def _args_to_config(args, config):
     return copied
 
 
-def get_config(args=None):
-    config = load_config(Path(__file__).parent/"config.yaml")
+def get_config(config_path, args=None):
+    config = load_config(config_path)
     if args is not None:
         config = _args_to_config(args=args, config=config)
 

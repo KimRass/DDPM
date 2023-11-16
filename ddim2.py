@@ -1,54 +1,12 @@
-"""
----
-title: Denoising Diffusion Implicit Models (DDIM) Sampling
-summary: >
- Annotated PyTorch implementation/tutorial of
- Denoising Diffusion Implicit Models (DDIM) Sampling
- for stable diffusion model.
----
-
-# Denoising Diffusion Implicit Models (DDIM) Sampling
-
-This implements DDIM sampling from the paper
-[Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502)
-"""
-
 from typing import Optional, List
 
 import numpy as np
 import torch
 
 from labml import monit
-from labml_nn.diffusion.stable_diffusion.latent_diffusion import LatentDiffusion
-from labml_nn.diffusion.stable_diffusion.sampler import DiffusionSampler
 
 
 class DDIMSampler(DiffusionSampler):
-    """
-    ## DDIM Sampler
-
-    This extends the [`DiffusionSampler` base class](index.html).
-
-    DDIM samples images by repeatedly removing noise by sampling step by step using,
-
-    \begin{align}
-    x_{\tau_{i-1}} &= \sqrt{\alpha_{\tau_{i-1}}}\Bigg(
-            \frac{x_{\tau_i} - \sqrt{1 - \alpha_{\tau_i}}\epsilon_\theta(x_{\tau_i})}{\sqrt{\alpha_{\tau_i}}}
-            \Bigg) \\
-            &+ \sqrt{1 - \alpha_{\tau_{i- 1}} - \sigma_{\tau_i}^2} \cdot \epsilon_\theta(x_{\tau_i}) \\
-            &+ \sigma_{\tau_i} \epsilon_{\tau_i}
-    \end{align}
-
-    where $\epsilon_{\tau_i}$ is random noise,
-    $\tau$ is a subsequence of $[1,2,\dots,T]$ of length $S$,
-    and
-    $$\sigma_{\tau_i} =
-    \eta \sqrt{\frac{1 - \alpha_{\tau_{i-1}}}{1 - \alpha_{\tau_i}}}
-    \sqrt{1 - \frac{\alpha_{\tau_i}}{\alpha_{\tau_{i-1}}}}$$
-
-    Note that, $\alpha_t$ in DDIM paper refers to ${\color{lightgreen}\bar\alpha_t}$ from [DDPM](ddpm.html).
-    """
-
     def __init__(self, model, n_ddim_timesteps: int, ddim_discretize: str = "uniform", ddim_eta: float = 0.):
         """
         :param model: is the model to predict noise $\epsilon_\text{cond}(x_t, c)$
