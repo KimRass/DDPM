@@ -102,13 +102,13 @@ $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \
 - This makes the neural network "know" at which particular time step (noise level) it is operating, for every image in a batch.
 - The joint distribution $p_{\theta}(x_{0:T})$ is called the reverse process, and it is defined as a Markov chain with learned Gaussian transitions starting at $p(x_{T}) = \mathcal{N}(x_{T};0,I)$ (Comment: The variable $x_{T}$ follows normal distribution with mean $0$ and variance $I$.):
 $$p_{\theta}(x_{t - 1} \vert x_{t}) = \mathcal{N}(x_{t - 1}; \mu_{\theta}(x_{t}, t), \Sigma_{\theta}(x_{t}, t))$$
-$$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \vert x_{t})$$
+$$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod_{t = 1}^{T}p_{\theta}(x_{t - 1} \vert x_{t})$$
 - (Comment: On reverse process, $x_{t - 1}$ follows normal distribution with mean $\mu_{\theta}$ and variance $\Sigma_{\theta}$ given $x_{t}$.)
 - What distinguishes diffusion models from other types of latent variable models is that the approximate posterior $q(x_{1:T} | x_{0})$, called the forward process or diffusion process, is fixed to a Markov chain that gradually adds Gaussian noise to the data according to a variance schedule $β_{1}, \ldots, β_{T}$ ($0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$):
 $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \beta_{t}I)$$
-$$q(x_{1:T} | x_{0}) = \prod^{T}_{t = 1}q(x_{t} \vert x_{t - 1})$$
+$$q(x_{1:T} | x_{0}) = \prod_{t = 1}^{T}q(x_{t} \vert x_{t - 1})$$
 $$q(x_{t} \vert x_{0}) = \mathcal{N}(x_{t}; \sqrt{\bar{\alpha}_{t}}x_{0}, (1 - \bar{\alpha}_{t})I)$$
-- where $\alpha_{t} = 1 - \beta_{t}$, $\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$
+- where $\alpha_{t} = 1 - \beta_{t}$, $\bar{\alpha_{t}} = \prod_{s=1}^{t}{\alpha_{s}}$
 - This means we can sample Gaussian noise and scale it appropriatly and add it to $x_{0}$ to get $x_{t}$ directly.
 - The mean can be computed as follows:
 $$\mu_{\theta}(x_{t}, t) = \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$
@@ -117,7 +117,7 @@ $$\mu_{\theta}(x_{t}, t) = \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{
 - We sample some noise from a Gaussian distribution and corrupt the input by this noise at level at $t$.
 - The neural network is trained to predict this noise based on the corrupted image $x_{t}$ (i.e. noise applied on $x_{0}$ based on known schedule $\beta_{t}$).
 $$\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$$
-$$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod^{T}_{t = 1}p_{\theta}(x_{t - 1} \vert x_{t})$$
+$$p_{\theta}(x_{0:T}) = p_{\theta}(x_{T})\prod_{t = 1}^{T}p_{\theta}(x_{t - 1} \vert x_{t})$$
 ### DDIM
 $$x_{t - 1} = \sqrt{\alpha_{t - 1}}\Bigg(\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}}{\sqrt{\alpha_{t}}}\Bigg) + \sqrt{1 - \alpha_{t - 1}}\epsilon_{\theta}$$
 ### Kullback–Leibler Divergence (KL Divergence)
