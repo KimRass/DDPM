@@ -1,13 +1,12 @@
-# 'DDPM' (Ho et al., 2020) implementation from scratch in PyTorch
-- [Denoising Diffusion Probabilistic Models](https://github.com/KimRass/DDPM/blob/main/papers/denoising_diffusion_probabilistic_models.pdf)
-## Pre-trained Models
+# 1. Pre-trained Models
 - [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
 - [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing)
     - Trained on CelebA dataset for 29 epochs
     - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.25, IS: 1.00
-## Sampling
-### `"normal"` mode
+
+# 2. Sampling
+## 1) `"normal"` mode
 ```bash
 # e.g.,
 python3 sample.py\
@@ -18,7 +17,7 @@ python3 sample.py\
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
-### `"progression"` mode
+## 2) `"progression"` mode
 ```bash
 # e.g.,
 python3 sample.py\
@@ -28,7 +27,7 @@ python3 sample.py\
     --batch_size=4
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
-### `"interpolation"` mode
+## 3) `"interpolation"` mode
 ```bash
 # e.g.,
 python3 sample.py
@@ -46,7 +45,7 @@ python3 sample.py
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/32c623d9-8e16-4913-a279-c48f75c05ffd" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/b7cb4e24-854d-4d47-8087-b1b4acf7f58b" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/88d32ee4-3155-4009-9796-e3c00fda9bc1" width="700">
-### `"coarse_to_fine"` mode
+## 4) `"coarse_to_fine"` mode
 - Please refer to "Figure 9" in the paper for the meaning of each row and column.
 ```bash
 # e.g.,
@@ -60,7 +59,8 @@ python3 sample.py
     --timestep=300
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/6dcf9ba6-5988-44ed-92b2-a63d9db09719" width="700">
-## Evaluation
+
+# 3. Evaluation
 ```bash
 # e.g.,
 python3 evaluate.py
@@ -73,8 +73,9 @@ python3 evaluate.py
     --padding=1\ # Optional
     --n_cells=100 # Optional
 ```
-## Theorectical Background
-### DDPM
+
+# 4. Theorectical Background
+## 1) DDPM
 - Forward (diffusion) process
     - We define the forward diffusion process which adds Gaussian noise at each time step $t$, according to a known variance schedule $0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$ as
     $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \beta_{t}I)$$
@@ -93,10 +94,10 @@ python3 evaluate.py
     $$p_{\theta}(x_{t - 1} | x_{t}) = \mathcal{N}(x_{t - 1}; \mu_{\theta}(x_{t}, t), \Sigma(x_{t}, t)$$
     - where the mean and variance are also conditioned on the noise level $t$.
     - Hence, our neural network needs to learn/represent the mean and variance. However, the DDPM authors decided to keep the variance fixed, and let the neural network only learn (represent) the mean $\mu_{\theta}​$ of this conditional probability distribution.
-### DDIM
+## 2) DDIM
 - Backward (denoising) process
     $$x_{t - 1} = \sqrt{\alpha_{t - 1}}\Bigg(\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}}{\sqrt{\alpha_{t}}}\Bigg) + \sqrt{1 - \alpha_{t - 1}}\epsilon_{\theta}$$
-### Kullback–Leibler Divergence (KL Divergence)
+## 3) Kullback–Leibler Divergence (KL Divergence)
 - Also called 'relative entropy' and 'I-divergence'.
 $$D_{KL}(P || Q)$$
 - A measure of how one probability distribution $P$ is different from a second, reference probability distribution $Q$.
@@ -105,9 +106,10 @@ $$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\big
 - For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
 $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
 - where $p$ and $q$ denote the probability densities of $P$ and $Q$.
-### FID (Frechet Inception Distance)
+## 4) FID (Frechet Inception Distance)
 $$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma_{Y} - 2\sqrt{\Sigma_{X}\Sigma_{Y}}\big)$$
-## References
+
+# 5. References
 - https://huggingface.co/blog/annotated-diffusion
 - https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 - https://lilianweng.github.io/posts/2021-07-11-diffusion-models/

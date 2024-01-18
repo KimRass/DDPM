@@ -7,7 +7,6 @@ import argparse
 
 from utils import get_config, save_image
 from ddpm import DDPM
-from ddim import DDIM
 from celeba import CelebADataset
 
 
@@ -35,8 +34,7 @@ def get_args():
 
 
 def get_ddpm_from_checkpoint(ckpt_path, n_timesteps, init_beta, fin_beta, device):
-    # ddpm = DDPM(
-    ddpm = DDIM(
+    ddpm = DDPM(
         n_timesteps=n_timesteps,
         init_beta=init_beta,
         fin_beta=fin_beta,

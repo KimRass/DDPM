@@ -22,13 +22,10 @@ from utils import (
 )
 from celeba import CelebADataset
 from ddpm import DDPM
-from ddim import DDIM
 
 
 def get_args():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("--mode", type=str, required=False, default="ddim", choices=["ddpm", "ddim"])
 
     parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--data_dir", type=str, required=True)
@@ -46,7 +43,7 @@ def get_args():
 def init_wandb(run_id, img_size):
     if run_id is None:
         run_id = wandb.util.generate_id()
-    wandb.init(project="DDIM", resume="allow", id=run_id)
+    wandb.init(project="DDPM", resume="allow", id=run_id)
     wandb.config.update({"IMG_SIZE": img_size})
     print(wandb.config)
 
@@ -128,19 +125,11 @@ if __name__ == "__main__":
         n_cpus=CONFIG["N_CPUS"],
     )
 
-    if CONFIG["MODE"] == "ddim":
-        dm = DDIM(
-            n_timesteps=CONFIG["N_TIMESTEPS"],
-            n_ddim_timesteps=CONFIG["N_DDIM_TIMESTEPS"],
-            init_beta=CONFIG["INIT_BETA"],
-            fin_beta=CONFIG["FIN_BETA"],
-        ).to(CONFIG["DEVICE"])
-    else:
-        dm = DDPM(
-            n_timesteps=CONFIG["N_TIMESTEPS"],
-            init_beta=CONFIG["INIT_BETA"],
-            fin_beta=CONFIG["FIN_BETA"],
-        ).to(CONFIG["DEVICE"])
+    dm = DDPM(
+        n_timesteps=CONFIG["N_TIMESTEPS"],
+        init_beta=CONFIG["INIT_BETA"],
+        fin_beta=CONFIG["FIN_BETA"],
+    ).to(CONFIG["DEVICE"])
     if CONFIG["TORCH_COMPILE"]:
         dm = torch.compile(dm)
     optim = Adam(dm.parameters(), lr=CONFIG["LR"])
@@ -183,7 +172,7 @@ if __name__ == "__main__":
 
         wandb.log({"Min loss": min_loss, "Loss": cur_loss}, step=epoch)
 
-        filename = f"""DDIM_{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
+        filename = f"""DDPM_{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
         save_diffusion_model(dm=dm, save_path=CONFIG["CKPTS_DIR"]/filename)
 
         save_wandb_checkpoint(
