@@ -2,7 +2,6 @@
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 
 import torch
-import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.cuda.amp import GradScaler
@@ -21,7 +20,7 @@ from utils import (
     modify_state_dict,
 )
 from celeba import CelebADataset
-from ddpm import DDPM
+from model import DDPM
 
 
 def get_args():
@@ -48,7 +47,7 @@ def init_wandb(run_id, img_size):
     print(wandb.config)
 
 
-def train_single_step(x0, dm, optim, scaler, crit, config):
+def train_single_step(x0, model, optim, scaler, config):
     x0 = x0.to(config["DEVICE"])
 
     t = sample_t(
@@ -65,9 +64,7 @@ def train_single_step(x0, dm, optim, scaler, crit, config):
         device_type=config["DEVICE"].type,
         dtype=torch.float16 if config["DEVICE"].type == "cuda" else torch.bfloat16,
     ):
-        noisy_image = dm(x0, t=t, eps=eps)
-        pred_eps = dm.predict_noise(x=noisy_image, t=t)
-        loss = crit(pred_eps, eps)
+        loss = model.get_loss(x0=x0, t=t, eps=eps)
 
     optim.zero_grad()
     if scaler is not None:
@@ -80,11 +77,11 @@ def train_single_step(x0, dm, optim, scaler, crit, config):
     return loss
 
 
-def save_wandb_checkpoint(epoch, dm, scaler, optim, loss, save_path):
+def save_wandb_checkpoint(epoch, model, scaler, optim, loss, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
     state_dict = {
         "epoch": epoch,
-        "diffusion_model": modify_state_dict(dm.state_dict()),
+        "diffusion_model": modify_state_dict(model.state_dict()),
         "scaler": scaler.state_dict(),
         "optimizer": optim.state_dict(),
         "loss": loss,
@@ -93,9 +90,9 @@ def save_wandb_checkpoint(epoch, dm, scaler, optim, loss, save_path):
     wandb.save(str(save_path), base_path=Path(save_path).parent)
 
 
-def save_diffusion_model(dm, save_path):
+def save_diffusion_model(model, save_path):
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(modify_state_dict(dm.state_dict()), str(save_path))
+    torch.save(modify_state_dict(model.state_dict()), str(save_path))
 
 
 def get_tain_dl(data_dir, img_size, batch_size, n_cpus):
@@ -125,22 +122,21 @@ if __name__ == "__main__":
         n_cpus=CONFIG["N_CPUS"],
     )
 
-    dm = DDPM(
+    model = DDPM(
         n_timesteps=CONFIG["N_TIMESTEPS"],
         init_beta=CONFIG["INIT_BETA"],
         fin_beta=CONFIG["FIN_BETA"],
     ).to(CONFIG["DEVICE"])
     if CONFIG["TORCH_COMPILE"]:
-        dm = torch.compile(dm)
-    optim = Adam(dm.parameters(), lr=CONFIG["LR"])
+        model = torch.compile(model)
+    optim = Adam(model.parameters(), lr=CONFIG["LR"])
     scaler = GradScaler() if CONFIG["DEVICE"].type == "cuda" else None
-    crit = nn.MSELoss(reduction="mean")
 
     if wandb.run.resumed:
         state_dict = torch.load(
             str(wandb.restore(CONFIG["WANDB_CKPT_PATH"])), map_location=CONFIG["DEVICE"],
         )
-        dm.load_state_dict(state_dict["diffusion_model"])
+        model.load_state_dict(state_dict["diffusion_model"])
         optim.load_state_dict(state_dict["optimizer"])
         scaler.load_state_dict(state_dict["scaler"])
         init_epoch = state_dict["epoch"]
@@ -156,7 +152,7 @@ if __name__ == "__main__":
         start_time = time()
         for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
             loss = train_single_step(
-                x0=x0, dm=dm, optim=optim, scaler=scaler, crit=crit, config=CONFIG,
+                x0=x0, model=model, optim=optim, scaler=scaler, config=CONFIG,
             )
             cum_loss += loss.item()
         cur_loss = cum_loss / len(train_dl)
@@ -173,11 +169,11 @@ if __name__ == "__main__":
         wandb.log({"Min loss": min_loss, "Loss": cur_loss}, step=epoch)
 
         filename = f"""DDPM_{CONFIG["IMG_SIZE"]}×{CONFIG["IMG_SIZE"]}_epoch_{epoch}.pth"""
-        save_diffusion_model(dm=dm, save_path=CONFIG["CKPTS_DIR"]/filename)
+        save_diffusion_model(model=model, save_path=CONFIG["CKPTS_DIR"]/filename)
 
         save_wandb_checkpoint(
             epoch=epoch,
-            dm=dm,
+            model=model,
             scaler=scaler,
             optim=optim,
             loss=cur_loss,

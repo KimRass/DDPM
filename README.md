@@ -1,16 +1,15 @@
 # 1. Pre-trained Models
-- [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing)
-    - Trained on CelebA dataset for 29 epochs
-- [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing)
-    - Trained on CelebA dataset for 29 epochs
-    - FID on 28,900 samples ("/generated_images/for_evaluation"): 10.25, IS: 1.00
+| | | |
+|-|-|-|
+| [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing) | Trained on CelebA 32 × 32 for 29 epochs | - |
+| [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing) | Trained on CelebA 64 × 64 for 29 epochs | FID 10.25, IS 1.00<br>on 28,900 samples ("/examples/for_evaluation") |
 
 # 2. Sampling
 ## 1) `"normal"` mode
 ```bash
 # e.g.,
 python3 sample.py\
-    --mode="normal"
+    --mode="normal"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/normal_and_progression/1.jpg"\
     --batch_size=4
@@ -21,7 +20,7 @@ python3 sample.py\
 ```bash
 # e.g.,
 python3 sample.py\
-    --mode="progression"
+    --mode="progression"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
     --save_path="generated_images/normal_and_progression/1.gif"\
     --batch_size=4
@@ -115,6 +114,6 @@ $$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma
 - https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
 - https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence
 - https://junia3.github.io/blog/DDPMproof
-- https://medium.com/mlearning-ai/understanding-the-diffusion-model-and-the-theory-tensorflow-cafcd5752b98
+<!-- - https://medium.com/mlearning-ai/understanding-the-diffusion-model-and-the-theory-tensorflow-cafcd5752b98 -->
 - https://wandb.ai/capecape/train_sd/reports/How-To-Train-a-Conditional-Diffusion-Model-From-Scratch--VmlldzoyNzIzNTQ1
 - https://keras.io/examples/generative/ddim/

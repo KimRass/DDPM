@@ -122,7 +122,7 @@ def modify_state_dict(state_dict, keyword="_orig_mod."):
     return new_state_dict
 
 
-def to_batched_timesteps(timestep, batch_size, device):
+def batchify_timesteps(timestep, batch_size, device):
     return torch.full(
         size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
     )
