@@ -47,24 +47,13 @@ def init_wandb(run_id, img_size):
     print(wandb.config)
 
 
-def train_single_step(x0, model, optim, scaler, config):
-    x0 = x0.to(config["DEVICE"])
-
-    t = sample_t(
-        n_timesteps=config["N_TIMESTEPS"], batch_size=config["BATCH_SIZE"], device=config["DEVICE"],
-    ) # ["Algorithm 1"] "3: $t \sim Uniform(\{1, \ldots, T\})$"
-    eps = sample_noise(
-        batch_size=config["BATCH_SIZE"],
-        n_channels=config["N_CHANNELS"],
-        img_size=config["IMG_SIZE"],
-        device=config["DEVICE"],
-    ) # ["Algorithm 1"] "4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-
+def train_single_step(ori_image, model, optim, scaler, config):
+    ori_image = ori_image.to(config["DEVICE"])
     with torch.autocast(
         device_type=config["DEVICE"].type,
         dtype=torch.float16 if config["DEVICE"].type == "cuda" else torch.bfloat16,
     ):
-        loss = model.get_loss(x0=x0, t=t, eps=eps)
+        loss = model.get_loss(ori_image)
 
     optim.zero_grad()
     if scaler is not None:
@@ -150,9 +139,9 @@ if __name__ == "__main__":
     for epoch in range(init_epoch + 1, CONFIG["N_EPOCHS"] + 1):
         cum_loss = 0
         start_time = time()
-        for x0 in train_dl: # "$x_{0} \sim q(x_{0})$"
+        for ori_image in train_dl: # "$x_{0} \sim q(x_{0})$"
             loss = train_single_step(
-                x0=x0, model=model, optim=optim, scaler=scaler, config=CONFIG,
+                ori_image=ori_image, model=model, optim=optim, scaler=scaler, config=CONFIG,
             )
             cum_loss += loss.item()
         cur_loss = cum_loss / len(train_dl)

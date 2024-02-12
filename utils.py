@@ -93,24 +93,6 @@ def image_to_grid(image, n_cols):
     return grid
 
 
-def get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
-    # "We set the forward process variances to constants increasing linearly."
-    # return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
-    return torch.linspace(init_beta, fin_beta, n_timesteps + 1) # "$\beta_{t}$"
-
-
-def index(x, t):
-    return x[t].view(-1, 1, 1, 1)
-
-
-def sample_noise(batch_size, n_channels, img_size, device):
-    return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
-
-
-def sample_t(n_timesteps, batch_size, device):
-    return torch.randint(low=0, high=n_timesteps, size=(batch_size,), device=device)
-
-
 def modify_state_dict(state_dict, keyword="_orig_mod."):
     new_state_dict = OrderedDict()
     for old_key in list(state_dict.keys()):
@@ -120,9 +102,3 @@ def modify_state_dict(state_dict, keyword="_orig_mod."):
             new_key = old_key
         new_state_dict[new_key] = state_dict[old_key]
     return new_state_dict
-
-
-def batchify_timesteps(timestep, batch_size, device):
-    return torch.full(
-        size=(batch_size,), fill_value=timestep, dtype=torch.long, device=device,
-    )
