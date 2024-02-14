@@ -17,24 +17,24 @@ import os
 from copy import deepcopy
 
 
-def _args_to_config(args, config):
-    copied = deepcopy(config)
-    for k, v in vars(args).items():
-        copied[k.upper()] = v
-    return copied
+# def _args_to_config(args, config):
+#     copied = deepcopy(config)
+#     for k, v in vars(args).items():
+#         copied[k.upper()] = v
+#     return copied
 
 
-def get_config(config_path, args=None):
-    config = load_config(config_path)
-    if args is not None:
-        config = _args_to_config(args=args, config=config)
+# def get_config(config_path, args=None):
+#     config = load_config(config_path)
+#     if args is not None:
+#         config = _args_to_config(args=args, config=config)
 
-    config["PARENT_DIR"] = Path(__file__).resolve().parent
-    config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"
-    config["WANDB_CKPT_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
+#     config["PARENT_DIR"] = Path(__file__).resolve().parent
+#     config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"
+#     config["WANDB_CKPT_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
 
-    config["DEVICE"] = get_device()
-    return config
+#     config["DEVICE"] = get_device()
+#     return config
 
 
 def set_seed(seed):
@@ -46,6 +46,17 @@ def set_seed(seed):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
+
+
+def get_device():
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+    return device
 
 
 def load_config(yaml_path):

@@ -168,7 +168,7 @@ class ResBlock(nn.Module):
 
     def forward(self, x, temb):
         h = self.block1(x)
-        h += self.temb_proj(temb)[:, :, None, None]
+        h = h + self.temb_proj(temb)[:, :, None, None]
         h = self.block2(h)
 
         h = h + self.shortcut(x)
@@ -190,22 +190,28 @@ class UNet(nn.Module):
         self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
         self.downblocks = nn.ModuleList()
         cxs = [ch]  # record output channel when dowmsample for upsample
-        now_ch = ch
+        cur_ch = ch
         for i, mult in enumerate(ch_mult):
             out_ch = ch * mult
             for _ in range(num_res_blocks):
-                self.downblocks.append(ResBlock(
-                    in_ch=now_ch, out_ch=out_ch, tdim=tdim,
-                    dropout=dropout, attn=(i in attn)))
-                now_ch = out_ch
-                cxs.append(now_ch)
+                self.downblocks.append(
+                    ResBlock(
+                        in_ch=cur_ch,
+                        out_ch=out_ch,
+                        tdim=tdim,
+                        dropout=dropout,
+                        attn=(i in attn)
+                    )
+                )
+                cur_ch = out_ch
+                cxs.append(cur_ch)
             if i != len(ch_mult) - 1:
-                self.downblocks.append(DownSample(now_ch))
-                cxs.append(now_ch)
+                self.downblocks.append(DownSample(cur_ch))
+                cxs.append(cur_ch)
 
         self.middleblocks = nn.ModuleList([
-            ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
-            ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
+            ResBlock(cur_ch, cur_ch, tdim, dropout, attn=True),
+            ResBlock(cur_ch, cur_ch, tdim, dropout, attn=False),
         ])
 
         self.upblocks = nn.ModuleList()
@@ -213,17 +219,17 @@ class UNet(nn.Module):
             out_ch = ch * mult
             for _ in range(num_res_blocks + 1):
                 self.upblocks.append(ResBlock(
-                    in_ch=cxs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
+                    in_ch=cxs.pop() + cur_ch, out_ch=out_ch, tdim=tdim,
                     dropout=dropout, attn=(i in attn)))
-                now_ch = out_ch
+                cur_ch = out_ch
             if i != 0:
-                self.upblocks.append(UpSample(now_ch))
+                self.upblocks.append(UpSample(cur_ch))
         assert len(cxs) == 0
 
         self.tail = nn.Sequential(
-            nn.GroupNorm(32, now_ch),
+            nn.GroupNorm(32, cur_ch),
             Swish(),
-            nn.Conv2d(now_ch, 3, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(cur_ch, 3, kernel_size=3, stride=1, padding=1)
         )
         self.initialize()
 
@@ -234,18 +240,16 @@ class UNet(nn.Module):
         nn.init.zeros_(self.tail[-1].bias)
 
     def forward(self, noisy_image, diffusion_step):
-        # Timestep embedding
         temb = self.time_embedding(diffusion_step)
-        # Downsampling
         x = self.head(noisy_image)
         xs = [x]
         for layer in self.downblocks:
             x = layer(x, temb)
             xs.append(x)
-        # Middle
+
         for layer in self.middleblocks:
             x = layer(x, temb)
-        # Upsampling
+
         for layer in self.upblocks:
             if isinstance(layer, ResBlock):
                 x = torch.cat([x, xs.pop()], dim=1)
@@ -259,11 +263,9 @@ class UNet(nn.Module):
         return x
 
 
-# beta = torch.linspace(0.0001, 0.02, 1001)
-# diffusion_step = torch.randint(0, 1000, size=(4,))
-# beta[diffusion_step].shape
-# beta[3].view(-1, 1, 1, 1).shape
 class DDPM(nn.Module):
+    # "We set T = 1000 without a sweep."
+    # "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
     def __init__(self, device, n_diffusion_steps=1000, init_beta=0.0001, fin_beta=0.02):
         super().__init__()
 
@@ -277,7 +279,7 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        self.nn = UNet(n_diffusion_steps=n_diffusion_steps).to(device)
+        self.net = UNet(n_diffusion_steps=n_diffusion_steps).to(device)
 
     def get_linear_beta_schdule(self):
         # "We set the forward process variances to constants increasing linearly."
@@ -309,7 +311,7 @@ class DDPM(nn.Module):
         return mean * ori_image + (var ** 0.5) * random_noise
 
     def predict_noise(self, noisy_image, diffusion_step):
-        return self.nn(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
     @staticmethod
     def norm(image):
@@ -318,20 +320,23 @@ class DDPM(nn.Module):
     def get_loss(self, ori_image):
         b, c, h, _ = ori_image.shape
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
-        diffusion_step = self.sample_diffusion_step(b)
+        diffusion_step = self.sample_diffusion_step(batch_size=b)
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         random_noise = self.sample_noise(batch_size=b, n_channels=c, img_size=h)
         norm_ori_image = self.norm(ori_image)
-        noisy_image = self.get_noisy_image(ori_image=norm_ori_image, diffusion_step=diffusion_step, random_noise=random_noise)
+        noisy_image = self.get_noisy_image(
+            ori_image=norm_ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+        )
+        # print(noisy_image.shape)
         pred_noise = self.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
 
     @torch.no_grad()
-    def denoise(self, noisy_image, step):
-        self.nn.eval()
+    def denoise(self, noisy_image, cur_diffusion_step):
+        self.net.eval()
 
         b, c, h, _ = noisy_image.shape
-        diffusion_step = self.batchify_diffusion_steps(step, batch_size=b)
+        diffusion_step = self.batchify_diffusion_steps(cur_diffusion_step, batch_size=b)
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         pred_noise = self.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
@@ -342,18 +347,18 @@ class DDPM(nn.Module):
             noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
         )
 
-        if step != 0:
+        if cur_diffusion_step != 0:
             beta_t = self.index(self.beta, diffusion_step=diffusion_step)
             random_noise = self.sample_noise(batch_size=b, n_channels=c, img_size=h) # "$z$"
             denoised_image += (beta_t ** 0.5) * random_noise # "$\sigma_{t}z$"
 
-        self.nn.train()
+        self.net.train()
         return denoised_image
 
     def sample(self, batch_size, n_channels, img_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size) # "$x_{T}$"
-        for step in range(self.n_diffusion_steps - 1, -1, -1):
-            x = self.denoise(noisy_image=x, step=step)
+        for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
+            x = self.denoise(noisy_image=x, cur_diffusion_step=cur_diffusion_step)
         return x
 
     @staticmethod
@@ -366,42 +371,48 @@ class DDPM(nn.Module):
     def progressively_sample(self, batch_size, n_channels, img_size, save_path, n_frames=100):
         with imageio.get_writer(save_path, mode="I") as writer:
             x = self.sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size)
-            for step in range(self.n_diffusion_steps - 1, -1, -1):
-                x = self.denoise(noisy_image=x, step=step)
+            for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
+                x = self.denoise(noisy_image=x, cur_diffusion_step=cur_diffusion_step)
 
-                if step % (self.n_diffusion_steps // n_frames) == 0:
+                if cur_diffusion_step % (self.n_diffusion_steps // n_frames) == 0:
                     frame = self._get_frame(x)
                     writer.append_data(frame)
 
     @staticmethod
-    def _linearly_interpolate(x, y, n):
+    def _linearly_interpolate(x, y, n_points):
         _, b, c, d = x.shape
-        lambs = torch.linspace(start=0, end=1, steps=n)
-        lambs = lambs[:, None, None, None].expand(n, b, c, d)
+        lambs = torch.linspace(start=0, end=1, steps=n_points)
+        lambs = lambs[:, None, None, None].expand(n_points, b, c, d)
         return ((1 - lambs) * x + lambs * y)
 
-    def interpolate(self, image1, image2, diffusion_step, n=10, return_image=True):
-        t = self.batchify_diffusion_steps(diffusion_step, batch_size=1)
-        noisy_image1 = self.get_noisy_image(ori_image=image1, t=t)
-        noisy_image2 = self.get_noisy_image(ori_image=image2, t=t)
+    def interpolate(self, ori_image1, ori_image2, interpolate_at=500, n_points=10, image_to_grid=True):
+        diffusion_step = self.batchify_diffusion_steps(interpolate_at, batch_size=1)
+        noisy_image1 = self.get_noisy_image(ori_image=ori_image1, diffusion_step=diffusion_step)
+        noisy_image2 = self.get_noisy_image(ori_image=ori_image2, diffusion_step=diffusion_step)
 
-        x = self._linearly_interpolate(noisy_image1, noisy_image2, n=n)
-        for diffusion_step in range(diffusion_step - 1, -1, -1):
-            x = self.denoise(x, diffusion_step=diffusion_step)
-        x = torch.cat([image1, x, image2], dim=0)
-        if not return_image:
+        x = self._linearly_interpolate(noisy_image1, noisy_image2, n_points=n_points)
+        for cur_diffusion_step in range(interpolate_at - 1, -1, -1):
+            x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
+        gen_image = torch.cat([ori_image1, x, ori_image2], dim=0)
+        if not image_to_grid:
             return x
-        image = image_to_grid(x, n_cols=n + 2)
-        return image
+        gen_grid = image_to_grid(gen_image, n_cols=n_points + 2)
+        return gen_grid
 
-    def coarse_to_fine_interpolate(self, image1, image2, n_rows=9, n=10):
+    def coarse_to_fine_interpolate(self, ori_image1, ori_image2, n_rows=9, n_points=10):
         rows = list()
-        for diffusion_step in range(self.n_diffusion_steps, -1, - self.n_diffusion_steps // (n_rows - 1)):
-            row = self.interpolate(image1, image2, diffusion_step=diffusion_step, n=n, return_image=False)
+        for interpolate_at in range(self.n_diffusion_steps, -1, - self.n_diffusion_steps // (n_rows - 1)):
+            row = self.interpolate(
+                ori_image1=ori_image1,
+                ori_image2=ori_image2,
+                interpolate_at=interpolate_at,
+                n_points=n_points,
+                image_to_grid=False,
+            )
             rows.append(row)
-        x = torch.cat(rows, dim=0)
-        image = image_to_grid(x, n_cols=n + 2)
-        return image
+        gen_image = torch.cat(rows, dim=0)
+        gen_grid = image_to_grid(gen_image, n_cols=n_points + 2)
+        return gen_grid
 
     def sample_eval_images(self, n_eval_imgs, batch_size, n_channels, img_size, save_dir):
         for idx in tqdm(range(1, math.ceil(n_eval_imgs / batch_size) + 1)):
@@ -417,8 +428,15 @@ class DDPM(nn.Module):
 
 
 if __name__ == "__main__":
-    DEVICE = torch.device("cpu")
-    model = DDPM(n_diffusion_steps=10, device=DEVICE)
+    DEVICE = torch.device("mps")
+    model = UNet()
+    x = torch.randn(4, 3, 64, 64)
+    y = torch.randint(0, 1000, size=(4,))
+    model(x, y)
+
+    model = DDPM(device=DEVICE)
+    x = torch.randn(4, 3, 64, 64).to(DEVICE)
+    model.get_loss(x)
 
     batch_size = 4
     n_channels = 3

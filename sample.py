@@ -6,7 +6,7 @@ import torch
 import argparse
 
 from utils import get_config, save_image
-from ddpm import DDPM
+from model import DDPM
 from celeba import CelebADataset
 
 
@@ -25,7 +25,7 @@ def get_args():
     parser.add_argument("--batch_size", type=int, required=False) # For `"normal"`, `"progression"`
 
     parser.add_argument("--data_dir", type=str, required=False) # For `"interpolation"`, `"coarse_to_fine"`
-    parser.add_argument("--timestep", type=int, required=False) # For `"interpolation"`, `"coarse_to_fine"`
+    parser.add_argument("--interpolate_at", type=int, default=500, required=False) # For `"interpolation"`
     parser.add_argument("--idx1", type=int, required=False) # For `"interpolation"`, `"coarse_to_fine"`
     parser.add_argument("--idx2", type=int, required=False) # For `"interpolation"`, `"coarse_to_fine"`
 
@@ -34,21 +34,21 @@ def get_args():
 
 
 def get_ddpm_from_checkpoint(ckpt_path, n_timesteps, init_beta, fin_beta, device):
-    ddpm = DDPM(
+    model = DDPM(
         n_timesteps=n_timesteps,
         init_beta=init_beta,
         fin_beta=fin_beta,
     ).to(device)
     state_dict = torch.load(str(ckpt_path), map_location=device)
-    ddpm.load_state_dict(state_dict)
-    return ddpm
+    model.load_state_dict(state_dict)
+    return model
 
 
 if __name__ == "__main__":
     args = get_args()
     CONFIG = get_config(args)
 
-    ddpm = get_ddpm_from_checkpoint(
+    model = get_ddpm_from_checkpoint(
         ckpt_path=CONFIG["CKPT_PATH"],
         n_timesteps=CONFIG["N_TIMESTEPS"],
         init_beta=CONFIG["INIT_BETA"],
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     )
 
     if CONFIG["MODE"] == "progression":
-        ddpm.progressively_sample(
+        model.progressively_sample(
             batch_size=CONFIG["BATCH_SIZE"],
             n_channels=CONFIG["N_CHANNELS"],
             img_size=CONFIG["IMG_SIZE"],
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         )
     else:
         if CONFIG["MODE"] == "normal":
-            gen_image = ddpm.sample(
+            gen_image = model.sample(
                 batch_size=CONFIG["BATCH_SIZE"],
                 n_channels=CONFIG["N_CHANNELS"],
                 img_size=CONFIG["IMG_SIZE"],
@@ -74,10 +74,16 @@ if __name__ == "__main__":
             )
         else:
             ds = CelebADataset(data_dir=CONFIG["DATA_DIR"], img_size=CONFIG["IMG_SIZE"])
-            image1 = ds[CONFIG["IDX1"]][None, :]
-            image2 = ds[CONFIG["IDX2"]][None, :]
+            ori_image1 = ds[CONFIG["IDX1"]][None, :]
+            ori_image2 = ds[CONFIG["IDX2"]][None, :]
             if CONFIG["MODE"]  == "interpolation":
-                gen_image = ddpm.interpolate(image1, image2, timestep=CONFIG["TIMESTEP"])
+                gen_image = model.interpolate(
+                    ori_image1=ori_image1,
+                    ori_image2=ori_image2,
+                    interpolate_at=CONFIG["INTERPOLATE_AT"],
+                )
             else:
-                gen_image = ddpm.coarse_to_fine_interpolate(image1, image2)
+                gen_image = model.coarse_to_fine_interpolate(
+                    ori_image1=ori_image1, ori_image2=ori_image2,
+                )
         save_image(gen_image, path=CONFIG["SAVE_PATH"])
