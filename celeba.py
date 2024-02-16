@@ -4,10 +4,13 @@
 
 from torch.utils.data import Dataset, DataLoader, Subset
 import torchvision.transforms as T
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 from PIL import Image
+import numpy as np
+import cv2
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-import numpy as np
 
 
 class CelebADataset(Dataset):
@@ -17,26 +20,26 @@ class CelebADataset(Dataset):
         self.img_paths = sorted(list(Path(data_dir).glob("**/*.jpg")))
 
         transforms = [
-            T.Resize(img_size),
-            T.CenterCrop(img_size),
-            T.ToTensor(),
+            A.SmallestMaxSize(max_size=img_size),
+            A.CenterCrop(height=img_size, width=img_size),
             # "We assume that image data consists of integers in $\{0, 1, \ldots, 255\}$ scaled linearly
             # to $[-1, 1]$. This ensures that the neural network reverse process operates
             # on consistently scaled inputs starting from the standard normal prior $p(x_{T})$."
-            T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+            A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
         ]
         if hflip:
             # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
-            transforms.append(T.RandomHorizontalFlip(p=0.5))
-        self.transforms = T.Compose(transforms)
+            transforms.append(A.HorizontalFlip(p=0.5))
+        transforms.append(ToTensorV2())
+        self.transforms = A.Compose(transforms)
 
     def __len__(self):
         return len(self.img_paths)
 
     def __getitem__(self, idx):
-        image = Image.open(self.img_paths[idx]).convert("RGB")
-        image = self.transforms(image)
-        return image
+        img = cv2.imread(str(self.img_paths[idx]), flags=cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return self.transforms(image=img)["image"]
 
 
 def dses_to_dls(train_ds, val_ds, test_ds, batch_size, n_cpus):

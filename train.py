@@ -54,10 +54,10 @@ class Trainer(object):
         self.run_id = run_id
         self.train_dl = train_dl
         self.val_dl = val_dl
-        self.save_dir = save_dir
+        self.save_dir = Path(save_dir)
         self.device = device
         
-        self.ckpt_path = Path(self.save_dir)/"checkpoint.tar"
+        self.ckpt_path = self.save_dir/"checkpoint.tar"
 
         self.init_wandb()
 
@@ -90,6 +90,8 @@ class Trainer(object):
             cum_train_loss = 0
             start_time = time()
             for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
+                from utils import image_to_grid
+                image_to_grid(ori_image, 4).show()
                 loss = self.train_single_step(
                     ori_image=ori_image, model=model, optim=optim, scaler=scaler,
                 )
