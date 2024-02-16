@@ -8,19 +8,18 @@ from PIL import Image
 from pathlib import Path
 
 
-def get_transformer(img_size, hflip=False):
+def get_transformer(img_size):
     transforms = [
         T.Resize(img_size),
         T.CenterCrop(img_size),
+        # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
+        T.RandomHorizontalFlip(p=0.5),
         T.ToTensor(),
         # "We assume that image data consists of integers in $\{0, 1, \ldots, 255\}$ scaled linearly
         # to $[-1, 1]$. This ensures that the neural network reverse process operates
         # on consistently scaled inputs starting from the standard normal prior $p(x_{T})$."
         T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
     ]
-    if hflip:
-        # "We used random horizontal flips during training. We found flips to improve sample quality slightly."
-        transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
 
 

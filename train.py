@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from utils import set_seed, get_elapsed_time, modify_state_dict, get_device
 from celeba import CelebADataset
-from model import DDPM
+from model2 import DDPM
 
 
 def get_args():
