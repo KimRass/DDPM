@@ -14,27 +14,7 @@ from collections import OrderedDict
 import random
 import numpy as np
 import os
-from copy import deepcopy
-
-
-# def _args_to_config(args, config):
-#     copied = deepcopy(config)
-#     for k, v in vars(args).items():
-#         copied[k.upper()] = v
-#     return copied
-
-
-# def get_config(config_path, args=None):
-#     config = load_config(config_path)
-#     if args is not None:
-#         config = _args_to_config(args=args, config=config)
-
-#     config["PARENT_DIR"] = Path(__file__).resolve().parent
-#     config["CKPTS_DIR"] = config["PARENT_DIR"]/"checkpoints"
-#     config["WANDB_CKPT_PATH"] = config["CKPTS_DIR"]/"checkpoint.tar"
-
-#     config["DEVICE"] = get_device()
-#     return config
+import re
 
 
 def set_seed(seed):
@@ -104,12 +84,9 @@ def image_to_grid(image, n_cols):
     return grid
 
 
-def modify_state_dict(state_dict, keyword="_orig_mod."):
+def modify_state_dict(state_dict, pattern=r"^module.|^_orig_mod."):
     new_state_dict = OrderedDict()
-    for old_key in list(state_dict.keys()):
-        if old_key and old_key.startswith(keyword):
-            new_key = old_key[len(keyword):]
-        else:
-            new_key = old_key
-        new_state_dict[new_key] = state_dict[old_key]
+    for old_key, value in state_dict.items():
+        new_key = re.sub(pattern=pattern, repl="", string=old_key)
+        new_state_dict[new_key] = value
     return new_state_dict

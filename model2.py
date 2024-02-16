@@ -37,12 +37,10 @@ class TimeEmbedder(nn.Module):
         self.register_buffer("pos_enc_mat", self.pe_mat)
 
     def forward(self, diffusion_step):
-        return self.pe_mat[diffusion_step, :]
+        return self.pe_mat[diffusion_step, :].to(diffusion_step.device)
 
 
 # "We use self-attention at the 16 × 16 feature map resolution."
-
-
 
 # Our CIFAR10 model has 35.7 million parameters, and our LSUN and CelebA-HQ models have 114 million parameters. We also trained a larger variant of the LSUN Bedroom model with approximately 256 million parameters by increasing filter count."
 
@@ -240,7 +238,7 @@ class UNet(nn.Module):
         time_dim = channels * 4
         self.time_embed = TimeEmbedder(
             n_diffusion_steps=n_diffusion_steps, time_dim=time_dim,
-        )
+        ).to(torch.device("mps"))
 
         self.down_blocks = nn.ModuleList()
         in_channels = channels
@@ -334,6 +332,16 @@ class UNet(nn.Module):
 
 
 class DDPM(nn.Module):
+    def get_linear_beta_schdule(self):
+        # "We set the forward process variances to constants increasing linearly."
+        # return torch.linspace(init_beta, fin_beta, n_diffusion_steps) # "$\beta_{t}$"
+        return torch.linspace(
+            self.init_beta,
+            self.fin_beta,
+            self.n_diffusion_steps + 1,
+            device=self.device,
+        ) # "$\beta_{t}$"
+
     # "We set T = 1000 without a sweep."
     # "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
     def __init__(
@@ -370,11 +378,6 @@ class DDPM(nn.Module):
             attns=attns,
             n_blocks=n_blocks,
         ).to(device)
-
-    def get_linear_beta_schdule(self):
-        # "We set the forward process variances to constants increasing linearly."
-        # return torch.linspace(init_beta, fin_beta, n_diffusion_steps) # "$\beta_{t}$"
-        return torch.linspace(self.init_beta, self.fin_beta, self.n_diffusion_steps + 1, device=self.device) # "$\beta_{t}$"
 
     @staticmethod
     def index(x, diffusion_step):
