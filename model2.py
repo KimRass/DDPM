@@ -346,7 +346,7 @@ class DDPM(nn.Module):
         # 256 128 64 32 16 8
         # 32 16 8 4
         channel_mults=[2, 2, 2, 2],
-        attns=[True, True, True],
+        attns=[True, True, True, True],
         n_blocks=2,
         init_beta=0.0001,
         fin_beta=0.02,

@@ -30,7 +30,7 @@ class CelebADataset(Dataset):
         self.img_paths = sorted(list(Path(data_dir).glob("**/*.jpg")))
         self.img_size = img_size
 
-        self.transformer = get_transformer(img_size=img_size, hflip=True)
+        self.transformer = get_transformer(img_size=img_size)
 
     def __len__(self):
         return len(self.img_paths)
