@@ -90,3 +90,14 @@ def modify_state_dict(state_dict, pattern=r"^module.|^_orig_mod."):
         new_key = re.sub(pattern=pattern, repl="", string=old_key)
         new_state_dict[new_key] = value
     return new_state_dict
+
+
+def print_n_prams(model):
+    n_params = 0
+    n_trainable_params = 0
+    for p in model.parameters():
+        n = p.numel()
+        n_params += n
+        if p.requires_grad:
+            n_trainable_params += n
+    print(f"[ # OF PARAMS: {n_params:,} ][ # OF TRAINABLE PARAMS: {n_trainable_params:,} ]")

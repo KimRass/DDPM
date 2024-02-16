@@ -1,5 +1,6 @@
 # References:
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
+    # https://docs.wandb.ai/guides/runs/resuming
 
 import torch
 from torch.optim import Adam
@@ -11,7 +12,13 @@ from time import time
 from tqdm import tqdm
 import wandb
 
-from utils import set_seed, get_elapsed_time, modify_state_dict, get_device
+from utils import (
+    set_seed,
+    get_elapsed_time,
+    modify_state_dict,
+    get_device,
+    print_n_prams,
+)
 from celeba import get_dls
 from model2 import DDPM
 
@@ -26,6 +33,8 @@ def get_args():
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=True)
+    parser.add_argument("--channels", type=int, default=32, required=False)
+    parser.add_argument("--n_blocks", type=int, default=2, required=False)
 
     parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--seed", type=int, default=223, required=False)
@@ -178,7 +187,14 @@ def main():
         device=DEVICE,
     )
 
-    model = DDPM(device=DEVICE)
+    model = DDPM(
+        device=DEVICE,
+        channels=args.CHANNELS,
+        channel_mults=[2, 2, 2, 2],
+        attns=[True, True, True, True],
+        n_blocks=args.N_BLOCKS,
+    )
+    print_n_prams(model)
     optim = Adam(model.parameters(), lr=args.LR)
     scaler = GradScaler() if DEVICE.type == "cuda" else None
 

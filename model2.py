@@ -37,7 +37,8 @@ class TimeEmbedder(nn.Module):
         self.register_buffer("pos_enc_mat", self.pe_mat)
 
     def forward(self, diffusion_step):
-        return self.pe_mat[diffusion_step, :].to(diffusion_step.device)
+        # return self.pe_mat[diffusion_step, :].to(diffusion_step.device)
+        return self.pe_mat.to(diffusion_step.device)[diffusion_step, :]
 
 
 # "We use self-attention at the 16 × 16 feature map resolution."
@@ -193,14 +194,6 @@ class UpBlock(nn.Module):
         return x
 
 
-# class Downsample(nn.Module):
-#     def __init__(self, channels):
-#         super().__init__()
-
-#         self.conv = nn.Conv2d(channels, channels, 3, 2, 1)
-
-#     def forward(self, x, t):
-#         return self.conv(x)
 class Downsample(nn.Conv2d):
     def __init__(self, channels):
         super().__init__(channels, channels, 3, 2, 1)
@@ -238,14 +231,13 @@ class UNet(nn.Module):
         time_dim = channels * 4
         self.time_embed = TimeEmbedder(
             n_diffusion_steps=n_diffusion_steps, time_dim=time_dim,
-        ).to(torch.device("mps"))
+        )
 
         self.down_blocks = nn.ModuleList()
         in_channels = channels
         for idx, (channel_mult, attn) in enumerate(zip(channel_mults, attns)):
             out_channels = in_channels * channel_mult
             for _ in range(n_blocks):
-                # print("DownBlock", in_channels, out_channels)
                 self.down_blocks.append(
                     DownBlock(
                         in_channels=in_channels,
@@ -258,7 +250,6 @@ class UNet(nn.Module):
                 in_channels = out_channels
 
             if idx < len(channel_mults) - 1:
-                # print("Downsample", out_channels, out_channels)
                 self.down_blocks.append(Downsample(out_channels))
 
         self.mid_block = MidBlock(
@@ -271,7 +262,6 @@ class UNet(nn.Module):
         ):
             out_channels = in_channels
             for _ in range(n_blocks):
-                # print("UpBlock", in_channels, out_channels)
                 self.up_blocks.append(
                     UpBlock(
                         in_channels=in_channels,
@@ -282,7 +272,6 @@ class UNet(nn.Module):
                     )
                 )
             out_channels = in_channels // channel_mult
-            # print("UpBlock", in_channels, out_channels)
             self.up_blocks.append(
                 UpBlock(
                     in_channels=in_channels,
@@ -295,7 +284,6 @@ class UNet(nn.Module):
             in_channels = out_channels
 
             if idx < len(channel_mults) - 1:
-                # print("Upsample", out_channels, out_channels)
                 self.up_blocks.append(Upsample(out_channels))
 
         self.final_block = nn.Sequential(
@@ -315,7 +303,6 @@ class UNet(nn.Module):
             else:
                 x = layer(x, t)
             xs.append(x)
-        # print(len(xs))
 
         x = self.mid_block(x, t)
 
@@ -324,7 +311,6 @@ class UNet(nn.Module):
                 x = layer(x)
             else:
                 x = layer(torch.cat([x, xs.pop()], dim=1), t)
-                # print(len(xs))
         assert len(xs) == 0
 
         x = self.final_block(x)
@@ -332,22 +318,11 @@ class UNet(nn.Module):
 
 
 class DDPM(nn.Module):
-    def get_linear_beta_schdule(self):
-        # "We set the forward process variances to constants increasing linearly."
-        # return torch.linspace(init_beta, fin_beta, n_diffusion_steps) # "$\beta_{t}$"
-        return torch.linspace(
-            self.init_beta,
-            self.fin_beta,
-            self.n_diffusion_steps + 1,
-            device=self.device,
-        ) # "$\beta_{t}$"
-
     # "We set T = 1000 without a sweep."
     # "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
     def __init__(
         self,
         device,
-        n_diffusion_steps=1000,
         channels=32,
         # "Our 32 × 32 models use four feature map resolutions (32 × 32 to 4 × 4),
         # and our 256 × ×256 models use six."
@@ -356,6 +331,7 @@ class DDPM(nn.Module):
         channel_mults=[2, 2, 2, 2],
         attns=[True, True, True, True],
         n_blocks=2,
+        n_diffusion_steps=1000,
         init_beta=0.0001,
         fin_beta=0.02,
     ):
@@ -378,6 +354,16 @@ class DDPM(nn.Module):
             attns=attns,
             n_blocks=n_blocks,
         ).to(device)
+
+    def get_linear_beta_schdule(self):
+        # "We set the forward process variances to constants increasing linearly."
+        # return torch.linspace(init_beta, fin_beta, n_diffusion_steps) # "$\beta_{t}$"
+        return torch.linspace(
+            self.init_beta,
+            self.fin_beta,
+            self.n_diffusion_steps + 1,
+            device=self.device,
+        ) # "$\beta_{t}$"
 
     @staticmethod
     def index(x, diffusion_step):
@@ -420,7 +406,6 @@ class DDPM(nn.Module):
         noisy_image = self.get_noisy_image(
             ori_image=norm_ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
-        # print(noisy_image.shape)
         pred_noise = self.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
 

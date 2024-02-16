@@ -8,7 +8,7 @@ python3 ../train.py\
     --save_dir="/Users/jongbeomkim/Documents/ddpm"\
     --img_size=64\
     --n_epochs=50\
-    --batch_size=16\
+    --batch_size=8\
     --lr=0.0003\
     --n_cpus=2\
     # --run_id="gorgeous-candles-21"\
