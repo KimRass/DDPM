@@ -6,6 +6,7 @@ source set_pythonpath.sh
 python3 ../train.py\
     --data_dir="/Users/jongbeomkim/Documents/datasets/celeba"\
     --save_dir="/Users/jongbeomkim/Documents/ddpm"\
+    --img_size=64\
     --n_epochs=50\
     --batch_size=16\
     --lr=0.0003\
