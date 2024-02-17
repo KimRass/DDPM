@@ -1,6 +1,8 @@
 # References:
     # https://github.com/KimRass/Transformer/blob/main/model.py
     # https://nn.labml.ai/diffusion/ddpm/unet.html
+    # https://github.com/davidADSP/Generative_Deep_Learning_2nd_Edition/blob/main/notebooks/08_diffusion/01_ddm/ddm.ipynb
+    # https://huggingface.co/blog/annotated-diffusion
 
 import torch
 from torch import nn
@@ -94,23 +96,15 @@ class DDPM(nn.Module):
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         return mean * ori_image + (var ** 0.5) * random_noise
 
-    def predict_noise(self, noisy_image, diffusion_step):
-        return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
-
-    @staticmethod
-    def norm(image):
-        return (image - torch.mean(image)) / torch.std(image)
-
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        norm_ori_image = self.norm(ori_image)
         noisy_image = self.get_noisy_image(
-            ori_image=norm_ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+            ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
-        pred_noise = self.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        pred_noise = self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
 
     @torch.no_grad()
@@ -122,7 +116,7 @@ class DDPM(nn.Module):
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        pred_noise = self.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        pred_noise = self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
         # # ["Algorithm 2-4: $$\mu_{\theta}(x_{t}, t) =
         # \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)$$
         # + \sigma_{t}z"
