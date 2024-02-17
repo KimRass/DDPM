@@ -1,8 +1,0 @@
-SEED: 223
-# "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
-INIT_BETA: 0.0001
-FIN_BETA: 0.02
-N_DIFFUSION_STEPS: 1000 # "We set T = 1000 without a sweep."
-N_CHANNELS: 3
-IMG_SIZE: 64
-N_FRAMES: 100

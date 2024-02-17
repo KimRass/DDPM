@@ -3,6 +3,7 @@
     # https://docs.wandb.ai/guides/runs/resuming
 
 import torch
+import gc
 from torch.optim import Adam
 from torch.cuda.amp import GradScaler
 import argparse
@@ -11,6 +12,7 @@ import math
 from time import time
 from tqdm import tqdm
 import wandb
+import contextlib
 
 from utils import (
     set_seed,
@@ -69,8 +71,6 @@ class Trainer(object):
         else:
             # run_id = wandb.util.generate_id()
             self.run = wandb.init(project="DDPM")
-        # wandb.config.update({"IMG_SIZE": img_size})
-        # print(wandb.config)
 
     def train(self, n_epochs, model, optim, scaler):
         if self.run.resumed:
@@ -125,12 +125,13 @@ class Trainer(object):
             save_image(gen_grid, save_path=sample_path)
             wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
+            self.test_sampling(epoch=epoch, model=model, batch_size=16)
+
     def train_single_step(self, ori_image, model, optim, scaler):
         ori_image = ori_image.to(self.device)
         with torch.autocast(
-            device_type=self.device.type,
-            dtype=torch.float16 if self.device.type == "cuda" else torch.bfloat16,
-        ):
+            device_type=self.device, dtype=torch.float16
+        ) if self.device.type == "cuda" else contextlib.nullcontext():
             loss = model.get_loss(ori_image)
 
         optim.zero_grad()
@@ -142,6 +143,18 @@ class Trainer(object):
             loss.backward()
             optim.step()
         return loss
+
+    def save_ckpt(self, epoch, model, optim, scaler, min_val_loss):
+        self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+        ckpt = {
+            "epoch": epoch,
+            "model": modify_state_dict(model.state_dict()),
+            "scaler": scaler.state_dict(),
+            "optimizer": optim.state_dict(),
+            "min_val_loss": min_val_loss,
+        }
+        torch.save(ckpt, str(self.ckpt_path))
+        wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
 
     @torch.no_grad()
     def validate(self, model):
@@ -162,23 +175,25 @@ class Trainer(object):
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(modify_state_dict(model.state_dict()), str(save_path))
 
-    def save_ckpt(self, epoch, model, optim, scaler, min_val_loss):
-        self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
-        ckpt = {
-            "epoch": epoch,
-            "model": modify_state_dict(model.state_dict()),
-            "scaler": scaler.state_dict(),
-            "optimizer": optim.state_dict(),
-            "min_val_loss": min_val_loss,
-        }
-        torch.save(ckpt, str(self.ckpt_path))
-        wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
+    def test_sampling(self, epoch, model, batch_size):
+        gen_image = model.sample(batch_size=batch_size)
+        gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
+        sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
+        save_image(gen_grid, save_path=sample_path)
+        wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
 
 def main():
     DEVICE = get_device()
     args = get_args()
     set_seed(args.SEED)
+    print(f"[ DEVICE: {DEVICE} ]")
+
+    gc.collect()
+    if DEVICE.type == "cuda":
+        torch.cuda.empty_cache()
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.synchronize()
 
     train_dl, val_dl, _ = get_dls(
         data_dir=args.DATA_DIR,
@@ -196,10 +211,13 @@ def main():
     )
 
     model = DDPM(
+        img_size=args.IMG_SIZE,
         device=DEVICE,
         channels=args.CHANNELS,
-        channel_mults=[2, 2, 2, 2],
-        attns=[True, True, True, True],
+        # channel_mults=[2, 2, 2, 2],
+        # attns=[True, True, True, True],
+        channel_mults=[2, 2],
+        attns=[False, False],
         n_blocks=args.N_BLOCKS,
     )
     print_n_prams(model)

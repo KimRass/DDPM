@@ -39,17 +39,14 @@ def get_device():
     return device
 
 
-def load_config(yaml_path):
-    with open(yaml_path) as f:
-        config = yaml.safe_load(f)
-    return config
-
-
 def get_device():
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
-        device = torch.device("cpu")
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
     return device
 
 

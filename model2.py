@@ -375,18 +375,24 @@ class DDPM(nn.Module):
 
     def sample_noise(self, batch_size):
         return torch.randn(
-            size=(batch_size, self.n_channels, self.img_size, self.img_size), device=self.device,
+            size=(batch_size, self.n_channels, self.img_size, self.img_size),
+            device=self.device,
         )
 
     def sample_diffusion_step(self, batch_size):
-        return torch.randint(0, self.n_diffusion_steps, size=(batch_size,), device=self.device)
+        return torch.randint(
+            0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
+        )
 
     def batchify_diffusion_steps(self, diffusion_step, batch_size):
         return torch.full(
-            size=(batch_size,), fill_value=diffusion_step, dtype=torch.long, device=self.device,
+            size=(batch_size,), fill_value=diffusion_step, dtype=torch.long,
+            device=self.device,
         )
 
-    def get_noisy_image(self, ori_image, diffusion_step, random_noise=None): # Forward (diffusion) process
+    def get_noisy_image(
+        self, ori_image, diffusion_step, random_noise=None,
+    ): # Forward (diffusion) process
         if random_noise is not None:
             random_noise = self.sample_noise(batch_size=ori_image.size(0))
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step) # "$\bar{\alpha_{t}}$"
@@ -468,7 +474,9 @@ class DDPM(nn.Module):
         lambs = lambs[:, None, None, None].expand(n_points, b, c, d)
         return ((1 - lambs) * x + lambs * y)
 
-    def interpolate(self, ori_image1, ori_image2, interpolate_at=500, n_points=10, image_to_grid=True):
+    def interpolate(
+        self, ori_image1, ori_image2, interpolate_at=500, n_points=10, image_to_grid=True,
+    ):
         diffusion_step = self.batchify_diffusion_steps(interpolate_at, batch_size=1)
         noisy_image1 = self.get_noisy_image(ori_image=ori_image1, diffusion_step=diffusion_step)
         noisy_image2 = self.get_noisy_image(ori_image=ori_image2, diffusion_step=diffusion_step)
@@ -484,7 +492,9 @@ class DDPM(nn.Module):
 
     def coarse_to_fine_interpolate(self, ori_image1, ori_image2, n_rows=9, n_points=10):
         rows = list()
-        for interpolate_at in range(self.n_diffusion_steps, -1, - self.n_diffusion_steps // (n_rows - 1)):
+        for interpolate_at in range(
+            self.n_diffusion_steps, -1, - self.n_diffusion_steps // (n_rows - 1),
+        ):
             row = self.interpolate(
                 ori_image1=ori_image1,
                 ori_image2=ori_image2,
