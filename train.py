@@ -214,10 +214,10 @@ def main():
         img_size=args.IMG_SIZE,
         device=DEVICE,
         channels=args.CHANNELS,
-        # channel_mults=[2, 2, 2, 2],
-        # attns=[True, True, True, True],
-        channel_mults=[2, 2],
-        attns=[False, False],
+        channel_mults=[2, 2, 2, 2],
+        attns=[True, True, True, True],
+        # channel_mults=[2, 2],
+        # attns=[False, False],
         n_blocks=args.N_BLOCKS,
     )
     print_n_prams(model)
