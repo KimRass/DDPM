@@ -103,7 +103,7 @@ class Trainer(object):
 
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
-                model_params_path = self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth"
+                model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
 
@@ -123,7 +123,7 @@ class Trainer(object):
 
             gen_image = model.sample(batch_size=16)
             gen_grid = image_to_grid(gen_image, n_cols=4)
-            sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
+            sample_path = str(self.save_dir/f"sample-epoch={epoch}.jpg")
             save_image(gen_grid, save_path=sample_path)
             wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
