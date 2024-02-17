@@ -12,7 +12,7 @@ import numpy as np
 import cv2
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-
+CelebA(root="")
 
 class CelebADataset(Dataset):
     def __init__(self, data_dir, img_size, hflip):
@@ -125,3 +125,8 @@ class ImageGridDataset(Dataset):
             self._idx_to_dimension(row_idx): self._idx_to_dimension(row_idx) + self.img_size,
             self._idx_to_dimension(col_idx): self._idx_to_dimension(col_idx) + self.img_size,
         ]
+논문 구현 경험 다수
+Vision model 개발 경험
+Tableau 기반의 전사 대시보드 구축 리드 경험
+아파트 실거래가 데이터 분석 리드 경험
+알고리즘과 자료구조에 대한 이해

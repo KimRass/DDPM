@@ -1,5 +1,6 @@
 # References:
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
+    # https://docs.wandb.ai/guides/runs/resuming
 
 import torch
 import gc
@@ -10,6 +11,7 @@ from pathlib import Path
 import math
 from time import time
 from tqdm import tqdm
+import wandb
 import contextlib
 
 from utils import (
@@ -63,9 +65,30 @@ class Trainer(object):
         
         self.ckpt_path = self.save_dir/"checkpoint.tar"
 
+        self.init_wandb()
+
+    def init_wandb(self):
+        if self.run_id is not None:
+            self.run = wandb.init(project="DDPM", resume="must", id=self.run_id)
+        else:
+            # run_id = wandb.util.generate_id()
+            self.run = wandb.init(project="DDPM")
+
     def train(self, n_epochs, model, optim):
-        init_epoch = 0
-        min_val_loss = math.inf
+        if self.run.resumed:
+            ckpt = torch.load(
+                str(wandb.restore(self.ckpt_path)), map_location=self.device,
+            )
+            model.load_state_dict(modify_state_dict(ckpt["model"]))
+            optim.load_state_dict(ckpt["optimizer"])
+            if self.scaler is not None:
+                self.scaler.load_state_dict(ckpt["scaler"])
+            init_epoch = ckpt["epoch"]
+            min_val_loss = ckpt["min_val_loss"]
+            print(f"Resuming from epoch {init_epoch + 1}...")
+        else:
+            init_epoch = 0
+            min_val_loss = math.inf
         model = torch.compile(model)
 
         for epoch in range(init_epoch + 1, n_epochs + 1):
@@ -89,6 +112,10 @@ class Trainer(object):
             log += f"[ Train loss: {train_loss:.4f} ]"
             log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
             print(log)
+            wandb.log(
+                {"Train loss": train_loss, "Val loss": val_loss, "Min val loss": min_val_loss},
+                step=epoch,
+            )
 
             self.save_ckpt(
                 epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
@@ -98,6 +125,7 @@ class Trainer(object):
             gen_grid = image_to_grid(gen_image, n_cols=4)
             sample_path = str(self.save_dir/f"sample-epoch={epoch}.jpg")
             save_image(gen_grid, save_path=sample_path)
+            wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
             self.test_sampling(epoch=epoch, model=model, batch_size=16)
 
@@ -148,12 +176,14 @@ class Trainer(object):
         if self.scaler is not None:
             ckpt["scaler"] = self.scaler.state_dict()
         torch.save(ckpt, str(self.ckpt_path))
+        wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
 
     def test_sampling(self, epoch, model, batch_size):
         gen_image = model.sample(batch_size=batch_size)
         gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
+        wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
 
 def main():
