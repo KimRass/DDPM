@@ -9,8 +9,7 @@ python3 ../train.py\
     --img_size=64\
     --n_epochs=50\
     --batch_size=8\
-    --lr=0.0003\
+    --lr=0.0006\
     --n_cpus=2\
-    --channels=32\
-    --n_blocks=1\
+    --n_blocks=2\
     # --run_id="gorgeous-candles-21"\

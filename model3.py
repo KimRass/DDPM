@@ -24,14 +24,9 @@ class DDPM(nn.Module):
         self,
         img_size,
         device,
-        channels=32,
-        # "Our 32 × 32 models use four feature map resolutions (32 × 32 to 4 × 4),
-        # and our 256 × ×256 models use six."
-        # 256 128 64 32 16 8
-        # 32 16 8 4
-        channel_mults=(2, 2, 2, 2),
-        attns=(True, True, True, True),
-        n_blocks=2,
+        channels,
+        attns,
+        n_blocks,
         n_channels=3,
         n_diffusion_steps=1000,
         init_beta=0.0001,
@@ -54,7 +49,6 @@ class DDPM(nn.Module):
         self.net = UNet(
             n_diffusion_steps=n_diffusion_steps,
             channels=channels,
-            channel_mults=channel_mults,
             attns=attns,
             n_blocks=n_blocks,
         ).to(device)
@@ -216,37 +210,42 @@ class DDPM(nn.Module):
                 save_path=Path(save_dir)/f"""{str(idx).zfill(len(str(n_eval_imgs)))}.jpg""",
             )
 
-
 class UNet(nn.Module):
     def __init__(
         self,
-        channels,
-        channel_mults,
+        # "Our 32 × 32 models use four feature map resolutions (32 × 32 to 4 × 4),
+        # and our 256 × 256 models use six."
+        # 4 8 16 32: 4
+        # 8 16 32 64: 4
+        # 8 16 32 64 128 256: 6
+        n_diffusion_steps,
+        channels=(32, 64, 128, 256, 512),
         # "All models have self-attention blocks at the 16 × 16 resolution
         # between the convolutional blocks."
         # "We use self-attention at the 16 × 16 feature map resolution."
-        attns,
+        attns=(False, False, True, False),
         # "All models have two convolutional residual blocks per resolution level."
         n_blocks=2,
         n_groups=32,
-        n_diffusion_steps=1000,
     ):
         super().__init__()
 
-        assert all([i < len(channel_mults) for i in attns]), "attn index out of bound"
+        assert len(attns) == len(channels) - 1
 
-        self.time_channels = channels * 4
+        self.time_channels = channels[0] * 4
 
-        self.init_conv = nn.Conv2d(3, channels, 3, 1, 1)
+        self.init_conv = nn.Conv2d(3, channels[0], 3, 1, 1)
 
         self.time_embed = TimeEmbedder(
             n_diffusion_steps=n_diffusion_steps, time_channels=self.time_channels,
         )
 
         self.down_blocks = nn.ModuleList()
-        in_channels = channels
-        for idx, (channel_mult, attn) in enumerate(zip(channel_mults, attns)):
-            out_channels = in_channels * channel_mult
+        for idx in range(len(channels) - 1):
+            in_channels = channels[idx]
+            out_channels = channels[idx + 1]
+            attn=attns[idx]
+            # print(in_channels, out_channels, attn)
             for _ in range(n_blocks):
                 self.down_blocks.append(
                     DownBlock(
@@ -259,18 +258,18 @@ class UNet(nn.Module):
                 )
                 in_channels = out_channels
 
-            if idx < len(channel_mults) - 1:
+            if idx < len(channels) - 2:
                 self.down_blocks.append(Downsample(out_channels))
 
         self.mid_block = MidBlock(
-            channels=in_channels, time_channels=self.time_channels, n_groups=n_groups,
+            channels=out_channels, time_channels=self.time_channels, n_groups=n_groups,
         )
 
         self.up_blocks = nn.ModuleList()
-        for idx, (channel_mult, attn) in enumerate(
-            zip(reversed(channel_mults), reversed(attns)),
-        ):
+        for idx in list(reversed(range(1, len(channels)))):
             out_channels = in_channels
+            attn = attns[idx - 1]
+            # print(in_channels, out_channels, attn)
             for _ in range(n_blocks):
                 self.up_blocks.append(
                     UpBlock(
@@ -281,7 +280,8 @@ class UNet(nn.Module):
                         n_groups=n_groups,
                     )
                 )
-            out_channels = in_channels // channel_mult
+            in_channels = channels[idx]
+            out_channels = channels[idx - 1]
             self.up_blocks.append(
                 UpBlock(
                     in_channels=in_channels,
@@ -293,7 +293,7 @@ class UNet(nn.Module):
             )
             in_channels = out_channels
 
-            if idx < len(channel_mults) - 1:
+            if idx > 1:
                 self.up_blocks.append(Upsample(out_channels))
 
         self.final_block = nn.Sequential(
@@ -304,7 +304,7 @@ class UNet(nn.Module):
 
     def forward(self, noisy_image, diffusion_step):
         x = self.init_conv(noisy_image)
-        print(x.shape)
+        # print(x.shape)
         t = self.time_embed(diffusion_step)
         # print(t.shape)
 
@@ -314,22 +314,22 @@ class UNet(nn.Module):
                 x = layer(x)
             else:
                 x = layer(x, t)
-            print(x.shape)
+            # print(x.shape)
             xs.append(x)
 
         x = self.mid_block(x, t)
-        print(x.shape)
+        # print(x.shape)
 
         for layer in self.up_blocks:
             if isinstance(layer, Upsample):
                 x = layer(x)
             else:
                 x = layer(torch.cat([x, xs.pop()], dim=1), t)
-            print(x.shape)
+            # print(x.shape)
         assert len(xs) == 0
 
         x = self.final_block(x)
-        print(x.shape)
+        # print(x.shape)
         return x
 
 
@@ -534,12 +534,8 @@ if __name__ == "__main__":
     t = torch.randint(0, 1000, size=(4,))
 
     model = UNet(
-        channels=32,
-        channel_mults=(2, 2, 2, 2),
-        attns=(True, True, True, True),
+        channels=(32, 64, 128, 256, 512),
+        attns=(False, False, True, False),
         n_blocks=2,
     )
     out = model(x, t)
-
-    # te = TimeEmbedder(1000, 32 * 4)
-    # te(t).shape

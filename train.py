@@ -22,7 +22,7 @@ from utils import (
     save_image,
 )
 from celeba import get_dls
-from model2 import DDPM
+from model3 import DDPM
 
 
 def get_args():
@@ -35,7 +35,6 @@ def get_args():
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=True)
-    parser.add_argument("--channels", type=int, default=32, required=False)
     parser.add_argument("--n_blocks", type=int, default=2, required=False)
 
     parser.add_argument("--run_id", type=str, required=False)
@@ -76,9 +75,11 @@ class Trainer(object):
                     ori_image=ori_image, model=model, optim=optim,
                 )
                 cum_train_loss += loss.item()
+                # cum_train_loss += 0
             train_loss = cum_train_loss / len(self.train_dl)
 
             val_loss = self.validate(model)
+            # val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)
@@ -93,11 +94,6 @@ class Trainer(object):
             self.save_ckpt(
                 epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
             )
-
-            gen_image = model.sample(batch_size=16)
-            gen_grid = image_to_grid(gen_image, n_cols=4)
-            sample_path = str(self.save_dir/f"sample-epoch={epoch}.jpg")
-            save_image(gen_grid, save_path=sample_path)
 
             self.test_sampling(epoch=epoch, model=model, batch_size=16)
 
@@ -186,11 +182,8 @@ def main():
     model = DDPM(
         img_size=args.IMG_SIZE,
         device=DEVICE,
-        channels=args.CHANNELS,
-        channel_mults=[2, 2, 2, 2],
-        attns=[True, True, True, True],
-        # channel_mults=[2, 2],
-        # attns=[False, False],
+        channels=(32, 64, 128, 256, 512),
+        attns=(False, False, True, False),
         n_blocks=args.N_BLOCKS,
     )
     print_n_prams(model)
