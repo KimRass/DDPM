@@ -60,6 +60,8 @@ class Trainer(object):
         self.val_dl = val_dl
         self.save_dir = Path(save_dir)
         self.device = device
+
+        self.scaler = GradScaler() if self.device.type == "cuda" else None
         
         self.ckpt_path = self.save_dir/"checkpoint.tar"
 
@@ -72,14 +74,15 @@ class Trainer(object):
             # run_id = wandb.util.generate_id()
             self.run = wandb.init(project="DDPM")
 
-    def train(self, n_epochs, model, optim, scaler):
+    def train(self, n_epochs, model, optim):
         if self.run.resumed:
             ckpt = torch.load(
                 str(wandb.restore(self.ckpt_path)), map_location=self.device,
             )
             model.load_state_dict(modify_state_dict(ckpt["model"]))
             optim.load_state_dict(ckpt["optimizer"])
-            scaler.load_state_dict(ckpt["scaler"])
+            if self.scaler is not None:
+                self.scaler.load_state_dict(ckpt["scaler"])
             init_epoch = ckpt["epoch"]
             min_val_loss = ckpt["min_val_loss"]
             print(f"Resuming from epoch {init_epoch + 1}...")
@@ -93,7 +96,7 @@ class Trainer(object):
             start_time = time()
             for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
                 loss = self.train_single_step(
-                    ori_image=ori_image, model=model, optim=optim, scaler=scaler,
+                    ori_image=ori_image, model=model, optim=optim,
                 )
                 cum_train_loss += loss.item()
             train_loss = cum_train_loss / len(self.train_dl)
@@ -106,11 +109,7 @@ class Trainer(object):
             wandb.log({"Val loss": val_loss, "Min val loss": min_val_loss}, step=epoch)
 
             self.save_ckpt(
-                epoch=epoch,
-                model=model,
-                optim=optim,
-                scaler=scaler,
-                min_val_loss=min_val_loss,
+                epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
             )
 
             val_loss = self.validate(model)
@@ -127,32 +126,33 @@ class Trainer(object):
 
             self.test_sampling(epoch=epoch, model=model, batch_size=16)
 
-    def train_single_step(self, ori_image, model, optim, scaler):
+    def train_single_step(self, ori_image, model, optim):
         ori_image = ori_image.to(self.device)
         with torch.autocast(
-            device_type=self.device, dtype=torch.float16
+            device_type=self.device.type, dtype=torch.float16,
         ) if self.device.type == "cuda" else contextlib.nullcontext():
             loss = model.get_loss(ori_image)
 
         optim.zero_grad()
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            scaler.step(optim)
-            scaler.update()
+        if self.scaler is not None:
+            self.scaler.scale(loss).backward()
+            self.scaler.step(optim)
+            self.scaler.update()
         else:
             loss.backward()
             optim.step()
         return loss
 
-    def save_ckpt(self, epoch, model, optim, scaler, min_val_loss):
+    def save_ckpt(self, epoch, model, optim, min_val_loss):
         self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
         ckpt = {
             "epoch": epoch,
             "model": modify_state_dict(model.state_dict()),
-            "scaler": scaler.state_dict(),
             "optimizer": optim.state_dict(),
             "min_val_loss": min_val_loss,
         }
+        if self.scaler is not None:
+            ckpt["scaler"] = self.scaler.state_dict()
         torch.save(ckpt, str(self.ckpt_path))
         wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
 
@@ -192,7 +192,7 @@ def main():
     gc.collect()
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
-        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         torch.cuda.synchronize()
 
     train_dl, val_dl, _ = get_dls(
@@ -222,9 +222,8 @@ def main():
     )
     print_n_prams(model)
     optim = Adam(model.parameters(), lr=args.LR)
-    scaler = GradScaler() if DEVICE.type == "cuda" else None
 
-    trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim, scaler=scaler)
+    trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim)
 
 
 if __name__ == "__main__":
