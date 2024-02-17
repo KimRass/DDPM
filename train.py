@@ -101,22 +101,25 @@ class Trainer(object):
                 cum_train_loss += loss.item()
             train_loss = cum_train_loss / len(self.train_dl)
 
-            log = f"[ {get_elapsed_time(start_time)} ]"
-            log += f"[ {epoch}/{n_epochs} ]"
-            log += f"[ Train loss: {train_loss:.4f} ]"
-            log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
-            print(log)
-            wandb.log({"Val loss": val_loss, "Min val loss": min_val_loss}, step=epoch)
-
-            self.save_ckpt(
-                epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
-            )
-
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
                 model_params_path = self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth"
                 self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
+
+            log = f"[ {get_elapsed_time(start_time)} ]"
+            log += f"[ {epoch}/{n_epochs} ]"
+            log += f"[ Train loss: {train_loss:.4f} ]"
+            log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
+            print(log)
+            wandb.log(
+                {"Train loss": train_loss, "Val loss": val_loss, "Min val loss": min_val_loss},
+                step=epoch,
+            )
+
+            self.save_ckpt(
+                epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
+            )
 
             gen_image = model.sample(batch_size=16)
             gen_grid = image_to_grid(gen_image, n_cols=4)
@@ -143,19 +146,6 @@ class Trainer(object):
             optim.step()
         return loss
 
-    def save_ckpt(self, epoch, model, optim, min_val_loss):
-        self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
-        ckpt = {
-            "epoch": epoch,
-            "model": modify_state_dict(model.state_dict()),
-            "optimizer": optim.state_dict(),
-            "min_val_loss": min_val_loss,
-        }
-        if self.scaler is not None:
-            ckpt["scaler"] = self.scaler.state_dict()
-        torch.save(ckpt, str(self.ckpt_path))
-        wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
-
     @torch.no_grad()
     def validate(self, model):
         model.eval()
@@ -174,6 +164,19 @@ class Trainer(object):
     def save_model_params(model, save_path):
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(modify_state_dict(model.state_dict()), str(save_path))
+
+    def save_ckpt(self, epoch, model, optim, min_val_loss):
+        self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+        ckpt = {
+            "epoch": epoch,
+            "model": modify_state_dict(model.state_dict()),
+            "optimizer": optim.state_dict(),
+            "min_val_loss": min_val_loss,
+        }
+        if self.scaler is not None:
+            ckpt["scaler"] = self.scaler.state_dict()
+        torch.save(ckpt, str(self.ckpt_path))
+        wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
 
     def test_sampling(self, epoch, model, batch_size):
         gen_image = model.sample(batch_size=batch_size)

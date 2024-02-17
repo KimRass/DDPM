@@ -3,6 +3,7 @@
     # https://github.com/KimRass/DCGAN/blob/main/celeba.py
 
 from torch.utils.data import Dataset, DataLoader, Subset
+from torchvision.datasets import CelebA
 import torchvision.transforms as T
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
