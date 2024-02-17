@@ -18,6 +18,8 @@ from utils import (
     modify_state_dict,
     get_device,
     print_n_prams,
+    image_to_grid,
+    save_image,
 )
 from celeba import get_dls
 from model2 import DDPM
@@ -80,7 +82,7 @@ class Trainer(object):
             scaler.load_state_dict(ckpt["scaler"])
             init_epoch = ckpt["epoch"]
             min_val_loss = ckpt["min_val_loss"]
-            # print(f"Resuming from epoch {init_epoch + 1}...")
+            print(f"Resuming from epoch {init_epoch + 1}...")
         else:
             init_epoch = 0
             min_val_loss = math.inf
@@ -90,23 +92,15 @@ class Trainer(object):
             cum_train_loss = 0
             start_time = time()
             for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
-                from utils import image_to_grid
-                image_to_grid(ori_image, 4).show()
                 loss = self.train_single_step(
                     ori_image=ori_image, model=model, optim=optim, scaler=scaler,
                 )
                 cum_train_loss += loss.item()
             train_loss = cum_train_loss / len(self.train_dl)
 
-            val_loss = self.validate(model)
-            if val_loss < min_val_loss:
-                filename = f"epoch={epoch}-val_loss={min_val_loss:.4f}.pth"
-                self.save_model_params(model=model, save_path=self.save_dir/filename)
-                min_val_loss = val_loss
-
             log = f"[ {get_elapsed_time(start_time)} ]"
             log += f"[ {epoch}/{n_epochs} ]"
-            log += f"[ Train loss: {train_loss:.4f}"
+            log += f"[ Train loss: {train_loss:.4f} ]"
             log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
             print(log)
             wandb.log({"Val loss": val_loss, "Min val loss": min_val_loss}, step=epoch)
@@ -118,6 +112,18 @@ class Trainer(object):
                 scaler=scaler,
                 min_val_loss=min_val_loss,
             )
+
+            val_loss = self.validate(model)
+            if val_loss < min_val_loss:
+                model_params_path = self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth"
+                self.save_model_params(model=model, save_path=model_params_path)
+                min_val_loss = val_loss
+
+            gen_image = model.sample(batch_size=16)
+            gen_grid = image_to_grid(gen_image, n_cols=4)
+            sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
+            save_image(gen_grid, save_path=sample_path)
+            wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
     def train_single_step(self, ori_image, model, optim, scaler):
         ori_image = ori_image.to(self.device)
@@ -166,7 +172,7 @@ class Trainer(object):
             "min_val_loss": min_val_loss,
         }
         torch.save(ckpt, str(self.ckpt_path))
-        wandb.save(str(self.ckpt_path))
+        wandb.save(str(self.ckpt_path), base_path=Path(self.ckpt_path).parent)
 
 
 def main():
