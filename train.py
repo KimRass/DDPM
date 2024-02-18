@@ -79,11 +79,12 @@ class Trainer(object):
 
     @torch.inference_mode()
     def validate(self, model):
-        val_loss = 0
+        cum_val_loss = 0
         for ori_image in self.val_dl:
             ori_image = ori_image.to(self.device)
             loss = model.get_loss(ori_image)
-            val_loss += (loss.item() / len(self.val_dl))
+            cum_val_loss += loss.item()
+        val_loss = cum_val_loss / len(self.val_dl)
         return val_loss
 
     @staticmethod
@@ -115,14 +116,15 @@ class Trainer(object):
         model = torch.compile(model)
 
         for epoch in range(init_epoch + 1, n_epochs + 1):
-            train_loss = 0
+            cum_train_loss = 0
             start_time = time()
             for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
                 ori_image = ori_image.to(self.device)
                 loss = self.train_single_step(
                     ori_image=ori_image, model=model, optim=optim, scaler=scaler,
                 )
-                train_loss += (loss.item() / len(self.train_dl))
+                cum_train_loss += loss.item()
+            train_loss = cum_train_loss / len(self.train_dl)
 
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
