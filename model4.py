@@ -387,7 +387,7 @@ class DDPM(nn.Module):
 
     def sample_diffusion_step(self, batch_size):
         return torch.randint(
-            0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
+            low=0, high=self.n_diffusion_steps, size=(batch_size,), device=self.device,
         )
 
     def batchify_diffusion_steps(self, diffusion_step, batch_size):
@@ -399,8 +399,8 @@ class DDPM(nn.Module):
         )
 
     # Forward (diffusion) process
-    def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
-        if random_noise is not None:
+    def forward(self, ori_image, diffusion_step, random_noise):
+        if random_noise is None:
             random_noise = self.sample_noise(batch_size=ori_image.size(0))
         # "$\bar{\alpha_{t}}$"
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
@@ -413,7 +413,7 @@ class DDPM(nn.Module):
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        noisy_image = self.get_noisy_image(
+        noisy_image = self(
             ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
         pred_noise = net(noisy_image=noisy_image, diffusion_step=diffusion_step)
