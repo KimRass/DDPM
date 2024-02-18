@@ -387,7 +387,7 @@ class DDPM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return x[diffusion_step].view(-1, 1, 1, 1)
+        return x[diffusion_step][:, None, None, None]
 
     def sample_noise(self, batch_size):
         return torch.randn(
@@ -402,7 +402,9 @@ class DDPM(nn.Module):
 
     def batchify_diffusion_steps(self, diffusion_step, batch_size):
         return torch.full(
-            size=(batch_size,), fill_value=diffusion_step, dtype=torch.long,
+            size=(batch_size,),
+            fill_value=diffusion_step,
+            dtype=torch.long,
             device=self.device,
         )
 
@@ -450,7 +452,7 @@ class DDPM(nn.Module):
             noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
         )
 
-        if cur_diffusion_step != 0:
+        if cur_diffusion_step > 0:
             beta_t = self.index(self.beta, diffusion_step=diffusion_step)
             random_noise = self.sample_noise(batch_size=noisy_image.size(0)) # "$z$"
             denoised_image += (beta_t ** 0.5) * random_noise # "$\sigma_{t}z$"

@@ -3,7 +3,7 @@
 
 import torch
 import gc
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.cuda.amp import GradScaler
 import argparse
 from pathlib import Path
@@ -189,8 +189,8 @@ def main():
         n_blocks=args.N_BLOCKS,
     )
     print_n_prams(model)
-    optim = Adam(model.parameters(), lr=args.LR)
-    # optim = Adam(model.net.parameters(), lr=args.LR)
+    optim = AdamW(model.parameters(), lr=args.LR)
+    # optim = AdamW(model.net.parameters(), lr=args.LR)
 
     trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim)
 
