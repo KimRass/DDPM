@@ -76,7 +76,7 @@ class Trainer(object):
             noisy_image = model.get_noisy_image(
                 ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
             )
-            pred_noise = self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
+            pred_noise = model.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
             loss =  F.mse_loss(pred_noise, random_noise, reduction="mean")
 
         optim.zero_grad()
