@@ -430,6 +430,7 @@ class DDPM(nn.Module):
         loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
         if torch.any(torch.isnan(loss)):
             print(pred_noise)
+        return loss
 
     @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):
