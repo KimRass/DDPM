@@ -70,7 +70,7 @@ class Trainer(object):
                 0, 1000, size=(self.train_dl.batch_size,), device=self.device,
             )
             random_noise = torch.randn(
-                size=(self.tran_dl.batch_size, 3, 32, 32),
+                size=(self.train_dl.batch_size, 3, 32, 32),
                 device=self.device,
             )
             noisy_image = model.get_noisy_image(
