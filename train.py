@@ -23,7 +23,7 @@ from utils import (
     save_image,
 )
 from data import get_dls
-from model3 import DDPM
+from model4 import DDPM, UNet
 
 
 def get_args():
@@ -61,23 +61,11 @@ class Trainer(object):
 
         self.ckpt_path = self.save_dir/"checkpoint.tar"
 
-    def train_single_step(self, ori_image, model, optim, scaler):
+    def train_single_step(self, ori_image, model, net, optim, scaler):
         with torch.autocast(
             device_type=self.device.type, dtype=torch.float16,
         ) if self.device.type == "cuda" else contextlib.nullcontext():
-            # loss = model.get_loss(ori_image)
-            diffusion_step = torch.randint(
-                0, 1000, size=(self.train_dl.batch_size,), device=self.device,
-            )
-            random_noise = torch.randn(
-                size=(self.train_dl.batch_size, 3, 32, 32),
-                device=self.device,
-            )
-            noisy_image = model.get_noisy_image(
-                ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
-            )
-            pred_noise = model.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
-            loss =  F.mse_loss(pred_noise, random_noise, reduction="mean")
+            loss = model.get_loss(ori_image, net)
 
         optim.zero_grad()
         if scaler is not None:
@@ -121,7 +109,7 @@ class Trainer(object):
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
 
-    def train(self, n_epochs, model, optim, scaler):
+    def train(self, n_epochs, model, net, optim, scaler):
         init_epoch = 0
         min_val_loss = math.inf
         model = torch.compile(model)
@@ -132,8 +120,9 @@ class Trainer(object):
             for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
                 ori_image = ori_image.to(self.device)
                 loss = self.train_single_step(
-                    ori_image=ori_image, model=model, optim=optim, scaler=scaler,
+                    ori_image=ori_image, model=model, net=net, optim=optim, scaler=scaler,
                 )
+                print(f"{loss.item():.4f}")
                 train_loss += (loss.item() / len(self.train_dl))
 
             # val_loss = self.validate(model)
@@ -189,15 +178,17 @@ def main():
     model = DDPM(
         img_size=args.IMG_SIZE,
         device=DEVICE,
+    )
+    net = UNet(
         channels=(32, 64, 128, 256, 512),
         attns=(False, True, False, False),
         n_blocks=args.N_BLOCKS,
-    )
-    print_n_prams(model)
-    optim = AdamW(model.net.parameters(), lr=args.LR)
+    ).to(DEVICE)
+    print_n_prams(net)
+    optim = AdamW(net.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
 
-    trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim, scaler=scaler)
+    trainer.train(n_epochs=args.N_EPOCHS, model=model, net=net, optim=optim, scaler=scaler)
 
 
 if __name__ == "__main__":
