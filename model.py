@@ -15,6 +15,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from utils import image_to_grid, save_image
+from model_labml import labmlUNet
 
 
 class TimeEmbedder(nn.Module):
@@ -380,6 +381,7 @@ class DDPM(nn.Module):
             attns=attns,
             n_blocks=n_blocks,
         ).to(device)
+        # self.net = labmlUNet().to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -425,7 +427,9 @@ class DDPM(nn.Module):
             ori_image=ori_image, diffusion_step=diffusion_step,
         )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        return F.mse_loss(pred_noise, random_noise, reduction="mean")
+        loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
+        if torch.any(torch.isnan(loss)):
+            print(pred_noise)
 
     @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):

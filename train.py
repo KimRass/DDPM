@@ -71,20 +71,22 @@ class Trainer(object):
                 device_type=self.device.type, dtype=torch.float16,
             ) if self.device.type == "cuda" else contextlib.nullcontext():
                 loss = model.get_loss(ori_image)
-                print(f"{loss.item():.3f}")
+                # print(f"{loss.item():.3f}")
+                # if torch.any(torch.isnan(weight))
+                # model.layer.grad
             cum_train_loss += loss.item()
 
             # nn.utils.clip_grad_norm_(
             #     model.parameters(), max_norm=5, error_if_nonfinite=True,
             # )
             optim.zero_grad()
-            # if scaler is not None:
-            #     scaler.scale(loss).backward()
-            #     scaler.step(optim)
-            #     scaler.update()
-            # else:
-            loss.backward()
-            optim.step()
+            if scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.step(optim)
+                scaler.update()
+            else:
+                loss.backward()
+                optim.step()
         train_loss = cum_train_loss / len(self.train_dl)
         return train_loss
 
