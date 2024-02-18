@@ -5,11 +5,11 @@
 import torch
 from torchvision.utils import make_grid
 import torchvision.transforms.functional as TF
+from torch.cuda.amp import GradScaler
 from datetime import timedelta
 from time import time
 from PIL import Image
 from pathlib import Path
-import yaml
 from collections import OrderedDict
 import random
 import numpy as np
@@ -48,6 +48,10 @@ def get_device():
         else:
             device = torch.device("cpu")
     return device
+
+
+def get_grad_scaler(device):
+    return GradScaler() if device.type == "cuda" else None
 
 
 def _to_pil(img):

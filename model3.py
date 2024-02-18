@@ -409,7 +409,7 @@ class DDPM(nn.Module):
         )
 
     # Forward (diffusion) process
-    def forward(self, ori_image, diffusion_step, random_noise=None):
+    def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
         if random_noise is not None:
             random_noise = self.sample_noise(batch_size=ori_image.size(0))
         # "$\bar{\alpha_{t}}$"
@@ -418,7 +418,7 @@ class DDPM(nn.Module):
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         return mean * ori_image + (var ** 0.5) * random_noise
 
-    def predict_noise(self, noisy_image, diffusion_step):
+    def forward(self, noisy_image, diffusion_step):
         return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
     def get_loss(self, ori_image):
@@ -426,16 +426,14 @@ class DDPM(nn.Module):
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        noisy_image = self(
+        noisy_image = self.get_noisy_image(
             ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
-        pred_noise = self.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):
-        self.eval()
-
         diffusion_step = self.batchify_diffusion_steps(
             cur_diffusion_step, batch_size=noisy_image.size(0),
         )
@@ -456,11 +454,9 @@ class DDPM(nn.Module):
             beta_t = self.index(self.beta, diffusion_step=diffusion_step)
             random_noise = self.sample_noise(batch_size=noisy_image.size(0)) # "$z$"
             denoised_image += (beta_t ** 0.5) * random_noise # "$\sigma_{t}z$"
-
-        self.train()
         return denoised_image
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
         for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
@@ -495,8 +491,8 @@ class DDPM(nn.Module):
         self, ori_image1, ori_image2, interpolate_at=500, n_points=10, image_to_grid=True,
     ):
         diffusion_step = self.batchify_diffusion_steps(interpolate_at, batch_size=1)
-        noisy_image1 = self(ori_image=ori_image1, diffusion_step=diffusion_step)
-        noisy_image2 = self(ori_image=ori_image2, diffusion_step=diffusion_step)
+        noisy_image1 = self.get_noisy_image(ori_image=ori_image1, diffusion_step=diffusion_step)
+        noisy_image2 = self.get_noisy_image(ori_image=ori_image2, diffusion_step=diffusion_step)
 
         x = self._linearly_interpolate(noisy_image1, noisy_image2, n_points=n_points)
         for cur_diffusion_step in range(interpolate_at - 1, -1, -1):

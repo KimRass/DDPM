@@ -4,7 +4,6 @@
 import torch
 import gc
 from torch.optim import AdamW
-from torch.cuda.amp import GradScaler
 import argparse
 from pathlib import Path
 import math
@@ -14,9 +13,10 @@ import contextlib
 
 from utils import (
     set_seed,
+    get_device,
+    get_grad_scaler,
     get_elapsed_time,
     modify_state_dict,
-    get_device,
     print_n_prams,
     image_to_grid,
     save_image,
@@ -58,39 +58,31 @@ class Trainer(object):
         self.save_dir = Path(save_dir)
         self.device = device
 
-        self.scaler = GradScaler() if self.device.type == "cuda" else None
-
         self.ckpt_path = self.save_dir/"checkpoint.tar"
 
-    def train_single_step(self, ori_image, model, optim):
-        ori_image = ori_image.to(self.device)
+    def train_single_step(self, ori_image, model, optim, scaler):
         with torch.autocast(
             device_type=self.device.type, dtype=torch.float16,
         ) if self.device.type == "cuda" else contextlib.nullcontext():
             loss = model.get_loss(ori_image)
 
         optim.zero_grad()
-        if self.scaler is not None:
-            self.scaler.scale(loss).backward()
-            self.scaler.step(optim)
-            self.scaler.update()
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.step(optim)
+            scaler.update()
         else:
             loss.backward()
             optim.step()
         return loss
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def validate(self, model):
-        model.eval()
-
-        cum_val_loss = 0
+        val_loss = 0
         for ori_image in self.val_dl:
             ori_image = ori_image.to(self.device)
             loss = model.get_loss(ori_image)
-            cum_val_loss += loss.item()
-        val_loss = cum_val_loss / len(self.val_dl)
-
-        model.train()
+            val_loss += (loss.item() / len(self.val_dl))
         return val_loss
 
     @staticmethod
@@ -98,7 +90,7 @@ class Trainer(object):
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(modify_state_dict(model.state_dict()), str(save_path))
 
-    def save_ckpt(self, epoch, model, optim, min_val_loss):
+    def save_ckpt(self, epoch, model, optim, min_val_loss, scaler):
         self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
         ckpt = {
             "epoch": epoch,
@@ -106,8 +98,8 @@ class Trainer(object):
             "optimizer": optim.state_dict(),
             "min_val_loss": min_val_loss,
         }
-        if self.scaler is not None:
-            ckpt["scaler"] = self.scaler.state_dict()
+        if scaler is not None:
+            ckpt["scaler"] = scaler.state_dict()
         torch.save(ckpt, str(self.ckpt_path))
 
     def test_sampling(self, epoch, model, batch_size):
@@ -116,26 +108,22 @@ class Trainer(object):
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
 
-    def train(self, n_epochs, model, optim):
+    def train(self, n_epochs, model, optim, scaler):
         init_epoch = 0
         min_val_loss = math.inf
         model = torch.compile(model)
 
         for epoch in range(init_epoch + 1, n_epochs + 1):
-            cum_train_loss = 0
+            train_loss = 0
             start_time = time()
             for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
+                ori_image = ori_image.to(self.device)
                 loss = self.train_single_step(
-                    ori_image=ori_image, model=model, optim=optim,
+                    ori_image=ori_image, model=model, optim=optim, scaler=scaler,
                 )
-                # print(model.net.final_block[2].weight.data.sum().item())
-                # print(model.net.init_conv.weight.data.sum().item())
-                # print(loss.item())
-                cum_train_loss += loss.item()
-            train_loss = cum_train_loss / len(self.train_dl)
+                train_loss += (loss.item() / len(self.train_dl))
 
             val_loss = self.validate(model)
-            # val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)
@@ -148,10 +136,14 @@ class Trainer(object):
             print(log)
 
             self.save_ckpt(
-                epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
+                epoch=epoch,
+                model=model,
+                optim=optim,
+                min_val_loss=min_val_loss,
+                scaler=scaler,
             )
 
-            self.test_sampling(epoch=epoch, model=model, batch_size=16)
+            self.test_sampling(epoch=epoch, model=model, batch_size=4)
 
 
 def main():
@@ -171,7 +163,6 @@ def main():
         img_size=args.IMG_SIZE,
         batch_size=args.BATCH_SIZE,
         n_cpus=args.N_CPUS,
-        seed=args.SEED,
     )
     trainer = Trainer(
         run_id=args.RUN_ID,
@@ -185,14 +176,14 @@ def main():
         img_size=args.IMG_SIZE,
         device=DEVICE,
         channels=(32, 64, 128, 256, 512),
-        attns=(False, False, True, False),
+        attns=(False, True, False, False),
         n_blocks=args.N_BLOCKS,
     )
     print_n_prams(model)
     optim = AdamW(model.parameters(), lr=args.LR)
-    # optim = AdamW(model.net.parameters(), lr=args.LR)
+    scaler = get_grad_scaler(device=DEVICE)
 
-    trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim)
+    trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim, scaler=scaler)
 
 
 if __name__ == "__main__":
