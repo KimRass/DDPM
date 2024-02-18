@@ -439,7 +439,7 @@ class DDPM(nn.Module):
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        pred_noise = self.predict_noise(
+        pred_noise = self(
             noisy_image=noisy_image.detach(), diffusion_step=diffusion_step,
         )
         # # ["Algorithm 2-4: $$\mu_{\theta}(x_{t}, t)
