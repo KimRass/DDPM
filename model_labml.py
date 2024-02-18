@@ -355,7 +355,7 @@ class labmlUNet(nn.Module):
         self.act = Swish()
         self.final = nn.Conv2d(in_channels, image_channels, kernel_size=(3, 3), padding=(1, 1))
 
-    def forward(self, ori_image: torch.Tensor, diffusion_step: torch.Tensor):
+    def forward(self, noisy_image: torch.Tensor, diffusion_step: torch.Tensor):
         """
         * `x` has shape `[batch_size, in_channels, height, width]`
         * `t` has shape `[batch_size]`
@@ -365,7 +365,7 @@ class labmlUNet(nn.Module):
         t = self.time_emb(diffusion_step)
 
         # Get image projection
-        x = self.image_proj(ori_image)
+        x = self.image_proj(noisy_image)
         # print(x.shape)
 
         # `h` will store outputs at each resolution for skip connection
