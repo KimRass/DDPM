@@ -23,7 +23,7 @@ from utils import (
     save_image,
 )
 from data import get_dls
-from model3 import DDPM
+from model import DDPM
 
 
 def get_args():
