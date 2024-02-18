@@ -414,16 +414,16 @@ class DDPM(nn.Module):
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
         noisy_image = mean * ori_image + (var ** 0.5) * random_noise
-        return random_noise, noisy_image
+        return random_noise, torch.clip(noisy_image, min=-1, max=1)
 
-    def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
-        # "$\bar{\alpha_{t}}$"
-        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        mean = alpha_bar_t ** 0.5 # $\sqrt{\bar{\alpha_{t}}}$
-        var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
-        if random_noise is None:
-            random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        return mean * ori_image + (var ** 0.5) * random_noise
+    # def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
+    #     # "$\bar{\alpha_{t}}$"
+    #     alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
+    #     mean = alpha_bar_t ** 0.5 # $\sqrt{\bar{\alpha_{t}}}$
+    #     var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+    #     if random_noise is None:
+    #         random_noise = self.sample_noise(batch_size=ori_image.size(0))
+    #     return mean * ori_image + (var ** 0.5) * random_noise
 
     def forward(self, noisy_image, diffusion_step):
         return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
@@ -432,18 +432,22 @@ class DDPM(nn.Module):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-        random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        noisy_image = self.get_noisy_image(
-            ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+        random_noise, noisy_image = self.get_noise_and_noisy_image(
+            ori_image=ori_image, diffusion_step=diffusion_step,
         )
+        # random_noise = self.sample_noise(batch_size=ori_image.size(0))
+        # noisy_image = self.get_noisy_image(
+        #     ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+        # )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
-        if torch.any(torch.isnan(loss)):
+        return F.mse_loss(pred_noise, random_noise, reduction="mean")
+        # loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
+        # if torch.any(torch.isnan(loss)):
             # print(pred_noise)
-            print(noisy_image.min(), noisy_image.max())
-            print(diffusion_step)
-            return
-        return loss
+            # print(noisy_image.min(), noisy_image.max())
+            # print(diffusion_step)
+            # return
+        # return loss
 
     @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):
