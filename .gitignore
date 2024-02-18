@@ -9,4 +9,3 @@ pyvenv.cfg
 share/
 wandb/
 _temp.py
-model_labml.py
