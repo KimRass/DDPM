@@ -7,7 +7,7 @@ python3 ../train.py\
     --data_dir="/Users/jongbeomkim/Documents/datasets/"\
     --save_dir="/Users/jongbeomkim/Documents/ddpm"\
     --img_size=32\
-    --n_epochs=500\
+    --n_epochs=50\
     --batch_size=16\
     --lr=0.0004\
     --n_cpus=2\

@@ -2,6 +2,7 @@
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import AdamW
 import gc
@@ -61,21 +62,31 @@ class Trainer(object):
 
         self.ckpt_path = self.save_dir/"checkpoint.tar"
 
-    def train_single_step(self, ori_image, model, optim, scaler):
-        with torch.autocast(
-            device_type=self.device.type, dtype=torch.float16,
-        ) if self.device.type == "cuda" else contextlib.nullcontext():
-            loss = model.get_loss(ori_image)
+    def train_for_single_epoch(self, model, optim, scaler):
+        cum_train_loss = 0
+        # for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
+        for ori_image in self.train_dl: # "$x_{0} \sim q(x_{0})$"
+            ori_image = ori_image.to(self.device)
+            with torch.autocast(
+                device_type=self.device.type, dtype=torch.float16,
+            ) if self.device.type == "cuda" else contextlib.nullcontext():
+                loss = model.get_loss(ori_image)
+                print(f"{loss.item():.3f}")
+            cum_train_loss += loss.item()
 
-        optim.zero_grad()
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            scaler.step(optim)
-            scaler.update()
-        else:
+            # nn.utils.clip_grad_norm_(
+            #     model.parameters(), max_norm=5, error_if_nonfinite=True,
+            # )
+            optim.zero_grad()
+            # if scaler is not None:
+            #     scaler.scale(loss).backward()
+            #     scaler.step(optim)
+            #     scaler.update()
+            # else:
             loss.backward()
             optim.step()
-        return loss
+        train_loss = cum_train_loss / len(self.train_dl)
+        return train_loss
 
     @torch.inference_mode()
     def validate(self, model):
@@ -116,16 +127,8 @@ class Trainer(object):
         init_epoch = 0
         min_val_loss = math.inf
         for epoch in range(init_epoch + 1, n_epochs + 1):
-            cum_train_loss = 0
             start_time = time()
-            for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
-                ori_image = ori_image.to(self.device)
-                loss = self.train_single_step(
-                    ori_image=ori_image, model=model, optim=optim, scaler=scaler,
-                )
-                cum_train_loss += loss.item()
-            train_loss = cum_train_loss / len(self.train_dl)
-
+            train_loss = self.train_for_single_epoch(model=model, optim=optim, scaler=scaler)
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
