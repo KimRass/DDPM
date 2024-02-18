@@ -15,10 +15,6 @@ from tqdm import tqdm
 from pathlib import Path
 
 from utils import image_to_grid, save_image
-from model import OldUNet
-from model_labml import labmlUNet
-
-torch.set_printoptions(linewidth=60)
 
 
 class TimeEmbedder(nn.Module):
