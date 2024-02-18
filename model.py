@@ -410,9 +410,19 @@ class DDPM(nn.Module):
     def get_noise_and_noisy_image(self, ori_image, diffusion_step):
         # "$\bar{\alpha_{t}}$"
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        mean = (alpha_bar_t ** 0.5) # $\sqrt{\bar{\alpha_{t}}}$
+        mean = alpha_bar_t ** 0.5 # $\sqrt{\bar{\alpha_{t}}}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
+        noisy_image = mean * ori_image + (var ** 0.5) * random_noise
+        return random_noise, noisy_image
+
+    def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
+        # "$\bar{\alpha_{t}}$"
+        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
+        mean = alpha_bar_t ** 0.5 # $\sqrt{\bar{\alpha_{t}}}$
+        var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+        if random_noise is None:
+            random_noise = self.sample_noise(batch_size=ori_image.size(0))
         noisy_image = mean * ori_image + (var ** 0.5) * random_noise
         return random_noise, noisy_image
 
@@ -423,13 +433,16 @@ class DDPM(nn.Module):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-        random_noise, noisy_image = self.get_noise_and_noisy_image(
-            ori_image=ori_image, diffusion_step=diffusion_step,
+        random_noise = self.sample_noise(batch_size=ori_image.size(0))
+        noisy_image = self.get_noisy_image(
+            ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
         if torch.any(torch.isnan(loss)):
-            print(pred_noise)
+            # print(pred_noise)
+            print(noisy_image.min(), noisy_image.max())
+            print(diffusion_step)
             return
         return loss
 
