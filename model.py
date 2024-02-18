@@ -440,14 +440,13 @@ class DDPM(nn.Module):
         #     ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         # )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        return F.mse_loss(pred_noise, random_noise, reduction="mean")
-        # loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
-        # if torch.any(torch.isnan(loss)):
-            # print(pred_noise)
-            # print(noisy_image.min(), noisy_image.max())
-            # print(diffusion_step)
-            # return
-        # return loss
+        # return F.mse_loss(pred_noise, random_noise, reduction="mean")
+        loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
+        if torch.any(torch.isnan(loss)):
+            print(noisy_image.min(), noisy_image.max())
+            print(pred_noise)
+            return
+        return loss
 
     @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):

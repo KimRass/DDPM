@@ -62,7 +62,7 @@ class Trainer(object):
 
         self.ckpt_path = self.save_dir/"checkpoint.tar"
 
-    def train_for_single_epoch(self, model, optim, scaler):
+    def train_for_one_epoch(self, model, optim, scaler):
         cum_train_loss = 0
         for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
         # for ori_image in self.train_dl: # "$x_{0} \sim q(x_{0})$"
@@ -130,7 +130,7 @@ class Trainer(object):
         min_val_loss = math.inf
         for epoch in range(init_epoch + 1, n_epochs + 1):
             start_time = time()
-            train_loss = self.train_for_single_epoch(model=model, optim=optim, scaler=scaler)
+            train_loss = self.train_for_one_epoch(model=model, optim=optim, scaler=scaler)
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
