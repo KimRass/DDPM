@@ -111,10 +111,10 @@ class Trainer(object):
         save_image(gen_grid, save_path=sample_path)
 
     def train(self, n_epochs, model, optim, scaler):
-        init_epoch = 0
-        min_val_loss = math.inf
         model = torch.compile(model)
 
+        init_epoch = 0
+        min_val_loss = math.inf
         for epoch in range(init_epoch + 1, n_epochs + 1):
             cum_train_loss = 0
             start_time = time()
