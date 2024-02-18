@@ -423,8 +423,7 @@ class DDPM(nn.Module):
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         if random_noise is None:
             random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        noisy_image = mean * ori_image + (var ** 0.5) * random_noise
-        return random_noise, noisy_image
+        return mean * ori_image + (var ** 0.5) * random_noise
 
     def forward(self, noisy_image, diffusion_step):
         return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
