@@ -394,8 +394,3 @@ class labmlUNet(nn.Module):
 
         # Final normalization and convolution
         return self.final(self.act(self.norm(x)))
-
-model = UNet(3, 32, (2, 2, 2, 2), (True, True, True, True), 1)
-x = torch.randn(4, 3, 64, 64)
-t = torch.randint(0, 1000, size=(4,))
-model(x, t).shape
