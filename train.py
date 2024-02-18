@@ -2,8 +2,9 @@
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 
 import torch
-import gc
+import torch.nn.functional as F
 from torch.optim import AdamW
+import gc
 import argparse
 from pathlib import Path
 import math
@@ -64,7 +65,19 @@ class Trainer(object):
         with torch.autocast(
             device_type=self.device.type, dtype=torch.float16,
         ) if self.device.type == "cuda" else contextlib.nullcontext():
-            loss = model.get_loss(ori_image)
+            # loss = model.get_loss(ori_image)
+            diffusion_step = torch.randint(
+                0, 1000, size=(self.train_dl.batch_size,), device=self.device,
+            )
+            random_noise = torch.randn(
+                size=(self.tran_dl.batch_size, 3, 32, 32),
+                device=self.device,
+            )
+            noisy_image = model.get_noisy_image(
+                ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+            )
+            pred_noise = self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
+            loss =  F.mse_loss(pred_noise, random_noise, reduction="mean")
 
         optim.zero_grad()
         if scaler is not None:
@@ -123,7 +136,8 @@ class Trainer(object):
                 )
                 train_loss += (loss.item() / len(self.train_dl))
 
-            val_loss = self.validate(model)
+            # val_loss = self.validate(model)
+            val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)
@@ -180,7 +194,7 @@ def main():
         n_blocks=args.N_BLOCKS,
     )
     print_n_prams(model)
-    optim = AdamW(model.parameters(), lr=args.LR)
+    optim = AdamW(model.net.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
 
     trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim, scaler=scaler)
