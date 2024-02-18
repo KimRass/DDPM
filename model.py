@@ -176,7 +176,7 @@ class ResBlock(nn.Module):
         return h
 
 
-class UNet(nn.Module):
+class OldUNet(nn.Module):
     def __init__(self, n_diffusion_steps=1000, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1):
         super().__init__()
 
@@ -261,8 +261,7 @@ class UNet(nn.Module):
         x = self.tail(x)
         assert len(xs) == 0
         return x
-model = UNet()
-model
+
 
 class DDPM(nn.Module):
     # "We set T = 1000 without a sweep."

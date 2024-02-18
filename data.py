@@ -3,7 +3,6 @@
     # https://github.com/KimRass/DCGAN/blob/main/celeba.py
 
 from torch.utils.data import Dataset, DataLoader, Subset
-from torchvision.datasets import CelebA
 import torchvision.transforms as T
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -89,6 +88,7 @@ def get_dls(data_dir, img_size, batch_size, n_cpus, seed, val_ratio=0.2, test_ra
         shuffle=True,
     )
     train_ds = Subset(train_val_test_ds, train_idx)
+    # train_ds = Subset(train_val_test_ds, range(batch_size))
     val_ds = Subset(train_val_test_ds, val_idx)
     test_ds = Subset(train_val_test_ds, test_idx)
     return dses_to_dls(

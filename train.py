@@ -21,7 +21,7 @@ from utils import (
     image_to_grid,
     save_image,
 )
-from celeba import get_dls
+from data import get_dls
 from model3 import DDPM
 
 
@@ -59,43 +59,8 @@ class Trainer(object):
         self.device = device
 
         self.scaler = GradScaler() if self.device.type == "cuda" else None
-        
+
         self.ckpt_path = self.save_dir/"checkpoint.tar"
-
-    def train(self, n_epochs, model, optim):
-        init_epoch = 0
-        min_val_loss = math.inf
-        model = torch.compile(model)
-
-        for epoch in range(init_epoch + 1, n_epochs + 1):
-            cum_train_loss = 0
-            start_time = time()
-            for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
-                loss = self.train_single_step(
-                    ori_image=ori_image, model=model, optim=optim,
-                )
-                cum_train_loss += loss.item()
-                # cum_train_loss += 0
-            train_loss = cum_train_loss / len(self.train_dl)
-
-            val_loss = self.validate(model)
-            # val_loss = 0
-            if val_loss < min_val_loss:
-                model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
-                self.save_model_params(model=model, save_path=model_params_path)
-                min_val_loss = val_loss
-
-            log = f"[ {get_elapsed_time(start_time)} ]"
-            log += f"[ {epoch}/{n_epochs} ]"
-            log += f"[ Train loss: {train_loss:.4f} ]"
-            log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
-            print(log)
-
-            self.save_ckpt(
-                epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
-            )
-
-            self.test_sampling(epoch=epoch, model=model, batch_size=16)
 
     def train_single_step(self, ori_image, model, optim):
         ori_image = ori_image.to(self.device)
@@ -151,6 +116,43 @@ class Trainer(object):
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
 
+    def train(self, n_epochs, model, optim):
+        init_epoch = 0
+        min_val_loss = math.inf
+        model = torch.compile(model)
+
+        for epoch in range(init_epoch + 1, n_epochs + 1):
+            cum_train_loss = 0
+            start_time = time()
+            for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
+                loss = self.train_single_step(
+                    ori_image=ori_image, model=model, optim=optim,
+                )
+                # print(model.net.final_block[2].weight.data.sum().item())
+                # print(model.net.init_conv.weight.data.sum().item())
+                # print(loss.item())
+                cum_train_loss += loss.item()
+            train_loss = cum_train_loss / len(self.train_dl)
+
+            val_loss = self.validate(model)
+            # val_loss = 0
+            if val_loss < min_val_loss:
+                model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
+                self.save_model_params(model=model, save_path=model_params_path)
+                min_val_loss = val_loss
+
+            log = f"[ {get_elapsed_time(start_time)} ]"
+            log += f"[ {epoch}/{n_epochs} ]"
+            log += f"[ Train loss: {train_loss:.4f} ]"
+            log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
+            print(log)
+
+            self.save_ckpt(
+                epoch=epoch, model=model, optim=optim, min_val_loss=min_val_loss,
+            )
+
+            self.test_sampling(epoch=epoch, model=model, batch_size=16)
+
 
 def main():
     DEVICE = get_device()
@@ -188,6 +190,7 @@ def main():
     )
     print_n_prams(model)
     optim = Adam(model.parameters(), lr=args.LR)
+    # optim = Adam(model.net.parameters(), lr=args.LR)
 
     trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim)
 
