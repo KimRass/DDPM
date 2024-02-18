@@ -64,8 +64,8 @@ class Trainer(object):
 
     def train_for_single_epoch(self, model, optim, scaler):
         cum_train_loss = 0
-        # for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
-        for ori_image in self.train_dl: # "$x_{0} \sim q(x_{0})$"
+        for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
+        # for ori_image in self.train_dl: # "$x_{0} \sim q(x_{0})$"
             ori_image = ori_image.to(self.device)
             with torch.autocast(
                 device_type=self.device.type, dtype=torch.float16,
