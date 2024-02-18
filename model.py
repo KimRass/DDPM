@@ -54,13 +54,13 @@ class SelfAttnBlock(nn.Module):
         self.dim = dim
         self.n_heads = n_heads
 
-        self.init_conv_dim = dim // n_heads
+        self.head_dim = dim // n_heads
 
         self.qkv_proj = nn.Linear(dim, dim * 3, bias=False)
         self.out_proj = nn.Linear(dim, dim, bias=False)
 
     def _rearrange(self, x):
-        return rearrange(x, pattern="b n (h d) -> b h n d", h=self.n_heads, d=self.init_conv_dim)
+        return rearrange(x, pattern="b n (h d) -> b h n d", h=self.n_heads, d=self.head_dim)
 
     def forward(self, x):
         ori_shape = x.shape
@@ -72,7 +72,7 @@ class SelfAttnBlock(nn.Module):
         v = self._rearrange(v)
 
         attn_score = torch.einsum("bnid,bnjd->bnij", q, k)
-        attn_score /= (self.init_conv_dim ** 0.5)
+        attn_score /= (self.head_dim ** 0.5)
         attn_weight = F.softmax(attn_score, dim=3)
 
         x = torch.einsum("bnij,bnjd->bnid", attn_weight, v)
@@ -375,13 +375,13 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        self.net = UNet(
-            n_diffusion_steps=n_diffusion_steps,
-            channels=channels,
-            attns=attns,
-            n_blocks=n_blocks,
-        ).to(device)
-        # self.net = labmlUNet().to(device)
+        # self.net = UNet(
+        #     n_diffusion_steps=n_diffusion_steps,
+        #     channels=channels,
+        #     attns=attns,
+        #     n_blocks=n_blocks,
+        # ).to(device)
+        self.net = labmlUNet().to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -430,6 +430,7 @@ class DDPM(nn.Module):
         loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
         if torch.any(torch.isnan(loss)):
             print(pred_noise)
+            return
         return loss
 
     @torch.inference_mode()
