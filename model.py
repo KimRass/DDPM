@@ -375,13 +375,13 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        # self.net = UNet(
-        #     n_diffusion_steps=n_diffusion_steps,
-        #     channels=channels,
-        #     attns=attns,
-        #     n_blocks=n_blocks,
-        # ).to(device)
-        self.net = labmlUNet().to(device)
+        self.net = UNet(
+            n_diffusion_steps=n_diffusion_steps,
+            channels=channels,
+            attns=attns,
+            n_blocks=n_blocks,
+        ).to(device)
+        # self.net = labmlUNet().to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -443,7 +443,7 @@ class DDPM(nn.Module):
         # return F.mse_loss(pred_noise, random_noise, reduction="mean")
         loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
         if torch.any(torch.isnan(loss)):
-            print(noisy_image.min(), noisy_image.max())
+            print(noisy_image)
             print(pred_noise)
             return
         return loss

@@ -2,7 +2,7 @@
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 
 import torch
-import torch.nn as nn
+import torch.nn.utils as torch_utils
 import torch.nn.functional as F
 from torch.optim import AdamW
 import gc
@@ -76,10 +76,10 @@ class Trainer(object):
                 # model.layer.grad
             cum_train_loss += loss.item()
 
-            # nn.utils.clip_grad_norm_(
-            #     model.parameters(), max_norm=5, error_if_nonfinite=True,
-            # )
             optim.zero_grad()
+            torch_utils.clip_grad_norm_(
+                model.parameters(), max_norm=5, error_if_nonfinite=True,
+            )
             if scaler is not None:
                 scaler.scale(loss).backward()
                 scaler.step(optim)
