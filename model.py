@@ -447,6 +447,7 @@ class DDPM(nn.Module):
         mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
         )
+        print("A")
         if cur_diffusion_step > 1:
             var = self.index(self.beta, diffusion_step=diffusion_step)
             print(var)
