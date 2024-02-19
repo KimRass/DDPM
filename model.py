@@ -48,8 +48,6 @@ class TimeEmbedder(nn.Module):
         )
 
     def forward(self, diffusion_step):
-        print(diffusion_step)
-        print(diffusion_step - 1)
         x = torch.index_select(
             self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step - 1,
         )
@@ -395,7 +393,7 @@ class DDPM(nn.Module):
 
     def sample_diffusion_step(self, batch_size):
         return torch.randint(
-            0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
+            1, self.n_diffusion_steps + 1, size=(batch_size,), device=self.device,
         )
 
     def batchify_diffusion_steps(self, cur_diffusion_step, batch_size):
@@ -425,6 +423,7 @@ class DDPM(nn.Module):
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
+        print(diffusion_step)
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         random_noise, noisy_image = self.get_noise_and_noisy_image(
             ori_image=ori_image, diffusion_step=diffusion_step,
@@ -552,7 +551,8 @@ if __name__ == "__main__":
         device=DEVICE,
     )
     noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
-    diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=DEVICE)
+    # for i in range(1, 1001):
+    diffusion_step = torch.full(size=(4,), fill_value=0, dtype=torch.long, device=DEVICE)
     # torch.index_select(
     #     model.net.time_embed.pe_mat.to(DEVICE), dim=0, index=diffusion_step - 1,
     # ).shape
