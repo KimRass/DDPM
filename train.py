@@ -26,6 +26,8 @@ from utils import (
 from data import get_dls
 from model import DDPM
 
+torch.set_printoptions(linewidth=70)
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -64,8 +66,10 @@ class Trainer(object):
 
     def train_for_one_epoch(self, model, optim, scaler):
         cum_train_loss = 0
-        for ori_image in tqdm(self.train_dl, leave=False): # "$x_{0} \sim q(x_{0})$"
-        # for ori_image in self.train_dl: # "$x_{0} \sim q(x_{0})$"
+        pbar = tqdm(self.train_dl, leave=False)
+        for ori_image in pbar: # "$x_{0} \sim q(x_{0})$"
+            pbar.set_description("Training...")
+
             ori_image = ori_image.to(self.device)
             with torch.autocast(
                 device_type=self.device.type, dtype=torch.float16,
@@ -74,15 +78,17 @@ class Trainer(object):
             cum_train_loss += loss.item()
 
             optim.zero_grad()
+            if scaler is not None:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
             # torch_utils.clip_grad_norm_(
             #     model.parameters(), max_norm=5, error_if_nonfinite=True,
             # )
             if scaler is not None:
-                scaler.scale(loss).backward()
                 scaler.step(optim)
                 scaler.update()
             else:
-                loss.backward()
                 optim.step()
             if torch.any(torch.isnan(loss)):
                 for name, model_param in model.named_parameters():
@@ -101,7 +107,10 @@ class Trainer(object):
     @torch.inference_mode()
     def validate(self, model):
         cum_val_loss = 0
-        for ori_image in self.val_dl:
+        pbar = tqdm(self.val_dl, leave=False)
+        for ori_image in pbar:
+            pbar.set_description("Validating...")
+
             ori_image = ori_image.to(self.device)
             loss = model.get_loss(ori_image)
             cum_val_loss += loss.item()
@@ -125,8 +134,11 @@ class Trainer(object):
             ckpt["scaler"] = scaler.state_dict()
         torch.save(ckpt, str(self.ckpt_path))
 
+    @torch.inference_mode()
     def test_sampling(self, epoch, model, batch_size):
         gen_image = model.sample(batch_size=batch_size)
+        # print(gen_image)
+        # print(gen_image.min(), gen_image.max())
         gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
@@ -138,18 +150,14 @@ class Trainer(object):
         min_val_loss = math.inf
         for epoch in range(init_epoch + 1, n_epochs + 1):
             start_time = time()
+            # train_loss = 0
             train_loss = self.train_for_one_epoch(model=model, optim=optim, scaler=scaler)
-            val_loss = self.validate(model)
+            # val_loss = self.validate(model)
+            val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
-
-            log = f"[ {get_elapsed_time(start_time)} ]"
-            log += f"[ {epoch}/{n_epochs} ]"
-            log += f"[ Train loss: {train_loss:.4f} ]"
-            log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
-            print(log)
 
             self.save_ckpt(
                 epoch=epoch,
@@ -160,6 +168,12 @@ class Trainer(object):
             )
 
             self.test_sampling(epoch=epoch, model=model, batch_size=4)
+
+            log = f"[ {get_elapsed_time(start_time)} ]"
+            log += f"[ {epoch}/{n_epochs} ]"
+            log += f"[ Train loss: {train_loss:.4f} ]"
+            log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
+            print(log)
 
 
 def main():

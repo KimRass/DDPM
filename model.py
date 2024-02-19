@@ -1,13 +1,13 @@
 # References:
     # https://github.com/KimRass/Transformer/blob/main/model.py
     # https://nn.labml.ai/diffusion/ddpm/unet.html
+    # https://nn.labml.ai/diffusion/ddpm/index.html
     # https://github.com/davidADSP/Generative_Deep_Learning_2nd_Edition/blob/main/notebooks/08_diffusion/01_ddm/ddm.ipynb
     # https://huggingface.co/blog/annotated-diffusion
 
 import torch
 from torch import nn
 from torch.nn import functional as F
-from einops import rearrange
 import numpy as np
 import imageio
 import math
@@ -293,7 +293,7 @@ class UNet(nn.Module):
             if idx > 1:
                 self.up_blocks.append(Upsample(out_channels))
 
-        self.final_block = nn.Sequential(
+        self.fin_block = nn.Sequential(
             nn.GroupNorm(n_groups, out_channels),
             Swish(),
             nn.Conv2d(out_channels, 3, 3, 1, 1)
@@ -325,7 +325,7 @@ class UNet(nn.Module):
             # print(x.shape)
         assert len(xs) == 0
 
-        x = self.final_block(x)
+        x = self.fin_block(x)
         # print(x.shape)
         return x
 
@@ -337,7 +337,6 @@ class DDPM(nn.Module):
         return torch.linspace(
             self.init_beta,
             self.fin_beta,
-            # self.n_diffusion_steps + 1,
             self.n_diffusion_steps,
             device=self.device,
         ) # "$\beta_{t}$"
@@ -382,23 +381,25 @@ class DDPM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return x[diffusion_step][:, None, None, None]
+        return x[diffusion_step - 1][:, None, None, None]
 
     def sample_noise(self, batch_size):
         return torch.randn(
             size=(batch_size, self.n_channels, self.img_size, self.img_size),
             device=self.device,
         )
+    random_noise = torch.randn(size=(16, 3, 32, 32))
+    random_noise.min(), random_noise.max()
 
     def sample_diffusion_step(self, batch_size):
         return torch.randint(
             0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
         )
 
-    def batchify_diffusion_steps(self, diffusion_step, batch_size):
+    def batchify_diffusion_steps(self, cur_diffusion_step, batch_size):
         return torch.full(
             size=(batch_size,),
-            fill_value=diffusion_step,
+            fill_value=cur_diffusion_step,
             dtype=torch.long,
             device=self.device,
         )
@@ -407,20 +408,14 @@ class DDPM(nn.Module):
     def get_noise_and_noisy_image(self, ori_image, diffusion_step):
         # "$\bar{\alpha_{t}}$"
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        mean = alpha_bar_t ** 0.5 # $\sqrt{\bar{\alpha_{t}}}$
-        var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+        # $\sqrt{\bar{\alpha_{t}}}x_{0}$
+        mean = (alpha_bar_t ** 0.5) * ori_image
+        # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+        var = 1 - alpha_bar_t
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        noisy_image = mean * ori_image + (var ** 0.5) * random_noise
-        return random_noise, torch.clip(noisy_image, min=-1, max=1)
-
-    # def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
-    #     # "$\bar{\alpha_{t}}$"
-    #     alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-    #     mean = alpha_bar_t ** 0.5 # $\sqrt{\bar{\alpha_{t}}}$
-    #     var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
-    #     if random_noise is None:
-    #         random_noise = self.sample_noise(batch_size=ori_image.size(0))
-    #     return mean * ori_image + (var ** 0.5) * random_noise
+        noisy_image = mean + (var ** 0.5) * random_noise
+        # return random_noise, torch.clip(noisy_image, min=-1, max=1)
+        return random_noise, noisy_image
 
     def forward(self, noisy_image, diffusion_step):
         return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
@@ -432,18 +427,8 @@ class DDPM(nn.Module):
         random_noise, noisy_image = self.get_noise_and_noisy_image(
             ori_image=ori_image, diffusion_step=diffusion_step,
         )
-        # random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        # noisy_image = self.get_noisy_image(
-        #     ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
-        # )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
-        # loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
-        # if torch.any(torch.isnan(loss)):
-        #     print(noisy_image)
-        #     print(pred_noise)
-        #     return
-        return loss
 
     @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):
@@ -452,27 +437,33 @@ class DDPM(nn.Module):
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        pred_noise = self(
-            noisy_image=noisy_image.detach(), diffusion_step=diffusion_step,
-        )
-        # # ["Algorithm 2-4: $$\mu_{\theta}(x_{t}, t)
-        # = \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t}
-        # - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)$$
-        # + \sigma_{t}z"
-        denoised_image = (1 / (alpha_t ** 0.5)) * (
+        # print(diffusion_step)
+        # print(alpha_t)
+        # print(alpha_bar_t)
+        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        # print(cur_diffusion_step, pred_noise.min(), pred_noise.max())
+        # # ["Algorithm 2-4:
+        # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
+        # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
+        # + \sigma_{t}z"$
+        mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
         )
-
-        if cur_diffusion_step > 0:
-            beta_t = self.index(self.beta, diffusion_step=diffusion_step)
-            random_noise = self.sample_noise(batch_size=noisy_image.size(0)) # "$z$"
-            denoised_image += (beta_t ** 0.5) * random_noise # "$\sigma_{t}z$"
-        return denoised_image
+        if cur_diffusion_step > 1:
+            var = self.index(self.beta, diffusion_step=diffusion_step)
+            random_noise = self.sample_noise(batch_size=noisy_image.size(0))
+            return mean + (var ** 0.5) * random_noise
+        return mean
 
     @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
-        for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
+        # print(x.min(), x.max())
+        pbar = tqdm(range(self.n_diffusion_steps, 0, -1), leave=False)
+        for cur_diffusion_step in pbar:
+            pbar.set_description("Sampling...")
+
+            # print(x.min(), x.max())
             x = self.denoise(noisy_image=x, cur_diffusion_step=cur_diffusion_step)
         return x
 
@@ -486,7 +477,7 @@ class DDPM(nn.Module):
     def progressively_sample(self, batch_size, save_path, n_frames=100):
         with imageio.get_writer(save_path, mode="I") as writer:
             x = self.sample_noise(batch_size=batch_size)
-            for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
+            for cur_diffusion_step in range(self.n_diffusion_steps, 0, -1):
                 x = self.denoise(noisy_image=x, cur_diffusion_step=cur_diffusion_step)
 
                 if cur_diffusion_step % (self.n_diffusion_steps // n_frames) == 0:
@@ -512,7 +503,7 @@ class DDPM(nn.Module):
         )
 
         x = self._linearly_interpolate(noisy_image1, noisy_image2, n_points=n_points)
-        for cur_diffusion_step in range(interpolate_at - 1, -1, -1):
+        for cur_diffusion_step in range(interpolate_at, 0, -1):
             x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
         gen_image = torch.cat([ori_image1, x, ori_image2], dim=0)
         if not image_to_grid:
@@ -549,13 +540,37 @@ class DDPM(nn.Module):
 
 if __name__ == "__main__":
     DEVICE = torch.device("mps")
-    x = torch.randn(4, 3, 64, 64)
-    t = torch.randint(0, 1000, size=(4,))
-
-    model = UNet(
-        n_diffusion_steps=1000,
-        channels=(32, 64, 128, 256, 512),
+    
+    model = DDPM(
+        img_size=32,
+        init_channels=32,
+        channels=(32, 64, 128, 256),
         attns=(False, False, True, False),
         n_blocks=2,
+        device=DEVICE,
     )
-    out = model(x, t)
+    with torch.inference_mode():
+        model.sample(batch_size=4)
+    
+
+    # x = torch.randn(4, 3, 64, 64)
+    # t = torch.randint(0, 1000, size=(4,))
+
+    # model = UNet(
+    #     n_diffusion_steps=1000,
+    #     channels=(32, 64, 128, 256, 512),
+    #     attns=(False, False, True, False),
+    #     n_blocks=2,
+    # )
+    # out = model(x, t)
+
+    torch.full(
+        size=(16,),
+        fill_value=15,
+        dtype=torch.long,
+        device=DEVICE,
+    )
+    beta = torch.linspace(0.0001, 0.02, 1000, device=DEVICE)
+    alpha = 1 - beta
+    alpha[-10:]
+    alpha[-10].item()
