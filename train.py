@@ -145,6 +145,7 @@ class Trainer(object):
 
     def train(self, n_epochs, model, optim, scaler):
         model = torch.compile(model)
+        self.test_sampling(epoch=1, model=model, batch_size=4)
 
         init_epoch = 0
         min_val_loss = math.inf
