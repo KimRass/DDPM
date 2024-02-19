@@ -74,9 +74,9 @@ class Trainer(object):
             cum_train_loss += loss.item()
 
             optim.zero_grad()
-            torch_utils.clip_grad_norm_(
-                model.parameters(), max_norm=5, error_if_nonfinite=True,
-            )
+            # torch_utils.clip_grad_norm_(
+            #     model.parameters(), max_norm=5, error_if_nonfinite=True,
+            # )
             if scaler is not None:
                 scaler.scale(loss).backward()
                 scaler.step(optim)
@@ -86,9 +86,11 @@ class Trainer(object):
                 optim.step()
         train_loss = cum_train_loss / len(self.train_dl)
         if torch.any(torch.isnan(loss)):
-            for name, model_param in model.named_parameters():
-                if torch.any(torch.isnan(model_param.grad)):
-                    print(name)
+            gen_grid = image_to_grid(ori_image, n_cols=int(self.batch_size ** 0.5))
+            save_image(gen_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
+            # for name, model_param in model.named_parameters():
+            #     if torch.any(torch.isnan(model_param.grad)):
+            #         print(name)
         return train_loss
 
     @torch.inference_mode()

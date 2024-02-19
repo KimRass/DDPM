@@ -47,40 +47,30 @@ class TimeEmbedder(nn.Module):
         return self.layers(x)
 
 
-class SelfAttnBlock(nn.Module):
-    def __init__(self, dim, n_heads=1):
+class ResConvSelfAttnBlock(nn.Module):
+    def __init__(self, channels, n_groups=32):
         super().__init__()
-    
-        self.dim = dim
-        self.n_heads = n_heads
 
-        self.head_dim = dim // n_heads
-
-        self.qkv_proj = nn.Linear(dim, dim * 3, bias=False)
-        self.out_proj = nn.Linear(dim, dim, bias=False)
-
-    def _rearrange(self, x):
-        return rearrange(x, pattern="b n (h d) -> b h n d", h=self.n_heads, d=self.head_dim)
+        self.gn = nn.GroupNorm(num_groups=n_groups, num_channels=channels)
+        self.qkv_proj = nn.Conv2d(channels, channels * 3, 1, 1, 0)
+        self.out_proj = nn.Conv2d(channels, channels, 1, 1, 0)
+        self.scale = channels ** (-0.5)
 
     def forward(self, x):
-        ori_shape = x.shape
+        b, c, h, w = x.shape
+        skip = x
 
-        x = rearrange(x, pattern="b c h w -> b (h w) c")
-        q, k, v = torch.chunk(self.qkv_proj(x), chunks=3, dim=2)
-        q = self._rearrange(q)
-        k = self._rearrange(k)
-        v = self._rearrange(v)
-
-        attn_score = torch.einsum("bnid,bnjd->bnij", q, k)
-        attn_score /= (self.head_dim ** 0.5)
-        attn_weight = F.softmax(attn_score, dim=3)
-
-        x = torch.einsum("bnij,bnjd->bnid", attn_weight, v)
-        x = rearrange(x, pattern="b n i d -> b i (n d)")
-
+        x = self.gn(x)
+        x = self.qkv_proj(x)
+        q, k, v = torch.chunk(x, chunks=3, dim=1)
+        attn_score = torch.einsum(
+            "bci,bcj->bij", q.view((b, c, -1)), k.view((b, c, -1)),
+        ) * self.scale
+        attn_weight = F.softmax(attn_score, dim=2)        
+        x = torch.einsum("bij,bcj->bci", attn_weight, v.view((b, c, -1)))
+        x = x.view(b, c, h, w)
         x = self.out_proj(x)
-        # return x.view(ori_shape), attn_weight
-        return x.view(ori_shape)
+        return x + skip
 
 
 class Swish(nn.Module):
@@ -139,7 +129,7 @@ class DownBlock(nn.Module):
             n_groups=n_groups,
         )
         if attn:
-            self.attn_block = SelfAttnBlock(dim=out_channels)
+            self.attn_block = ResConvSelfAttnBlock(channels=out_channels)
 
     def forward(self, x, t):
         x = self.res_block(x, t)
@@ -158,7 +148,7 @@ class MidBlock(nn.Module):
             time_channels=time_channels,
             n_groups=n_groups,
         )
-        self.attn_block = SelfAttnBlock(dim=channels)
+        self.attn_block = ResConvSelfAttnBlock(channels=channels)
         self.res_block2 = ResBlock(
             in_channels=channels,
             out_channels=channels,
@@ -186,7 +176,7 @@ class UpBlock(nn.Module):
             n_groups=n_groups,
         )
         if attn:
-            self.attn_block = SelfAttnBlock(dim=out_channels)
+            self.attn_block = ResConvSelfAttnBlock(channels=out_channels)
 
     def forward(self, x, t):
         x = self.res_block(x, t)
