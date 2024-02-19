@@ -18,6 +18,11 @@ from utils import image_to_grid, save_image
 from model_labml import labmlUNet
 
 
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+
 class TimeEmbedder(nn.Module):
     # "Parameters are shared across time, which is specified to the network using the Transformer
     # sinusoidal position embedding."
@@ -73,21 +78,19 @@ class ResConvSelfAttnBlock(nn.Module):
         return x + skip
 
 
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
-
-
 class ResBlock(nn.Module):
     def __init__(self, in_channels, out_channels, time_channels, n_groups=32, drop_prob=0.1):
         super().__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
 
         self.layers1 = nn.Sequential(
             # "We replaced weight normalization with group normalization
             # to make the implementation simpler."
             nn.GroupNorm(num_groups=n_groups, num_channels=in_channels),
             Swish(),
-            nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1),
+            nn.Conv2d(in_channels, out_channels, 3, 1, 1),
         )
         self.time_proj = nn.Sequential(
             Swish(),
@@ -97,13 +100,11 @@ class ResBlock(nn.Module):
             nn.GroupNorm(num_groups=n_groups, num_channels=out_channels),
             Swish(),
             nn.Dropout(drop_prob),
-            nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=1),
+            nn.Conv2d(out_channels, out_channels, 3, 1, 1),
         )
 
         if in_channels != out_channels:
-            self.shortcut = nn.Conv2d(in_channels, out_channels, 1, stride=1, padding=0)
-        else:
-            self.shortcut = nn.Identity()
+            self.shortcut = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
 
     def forward(self, x, t):
         x1 = self.layers1(x)
@@ -112,8 +113,9 @@ class ResBlock(nn.Module):
         # "We condition all layers on $t$ by adding in the Transformer sinusoidal position embedding."
         x1 = x1 + self.time_proj(t)[:, :, None, None]
         x1 = self.layers2(x1)
-        x2 = self.shortcut(x)
-        return x1 + x2
+        if self.in_channels != self.out_channels:
+            return x1 + self.shortcut(x)
+        return x1 + x
 
 
 class DownBlock(nn.Module):
@@ -154,7 +156,7 @@ class MidBlock(nn.Module):
             out_channels=channels,
             time_channels=time_channels,
             n_groups=n_groups,
-            )
+        )
 
     def forward(self, x, t):
         x = self.res_block1(x, t)
@@ -196,7 +198,7 @@ class Upsample(nn.Module):
 
         self.layers = nn.Sequential(
             nn.Upsample(scale_factor=2, mode="nearest"),
-            nn.Conv2d(channels, channels, 3, stride=1, padding=1),
+            nn.Conv2d(channels, channels, 3, 1, 1),
         )
 
     def forward(self, x):
@@ -212,7 +214,8 @@ class UNet(nn.Module):
         # 8 16 32 64: 4
         # 8 16 32 64 128 256: 6
         n_diffusion_steps=1000,
-        channels=(32, 64, 128, 256, 512),
+        init_channels=32,
+        channels=(64, 128, 256, 512),
         # "All models have self-attention blocks at the 16 × 16 resolution
         # between the convolutional blocks."
         # "We use self-attention at the 16 × 16 feature map resolution."
@@ -223,16 +226,17 @@ class UNet(nn.Module):
     ):
         super().__init__()
 
-        assert len(attns) == len(channels) - 1
+        assert len(attns) == len(channels)
 
         self.time_channels = channels[0] * 4
 
-        self.init_conv = nn.Conv2d(3, channels[0], 3, 1, 1)
+        self.init_conv = nn.Conv2d(3, init_channels, 3, 1, 1)
 
         self.time_embed = TimeEmbedder(
             n_diffusion_steps=n_diffusion_steps, time_channels=self.time_channels,
         )
 
+        channels = [init_channels] + list(channels)
         self.down_blocks = nn.ModuleList()
         for idx in range(len(channels) - 1):
             in_channels = channels[idx]
@@ -343,6 +347,7 @@ class DDPM(nn.Module):
     def __init__(
         self,
         img_size,
+        init_channels,
         channels,
         attns,
         device,
@@ -368,6 +373,7 @@ class DDPM(nn.Module):
 
         self.net = UNet(
             n_diffusion_steps=n_diffusion_steps,
+            init_channels=init_channels,
             channels=channels,
             attns=attns,
             n_blocks=n_blocks,
