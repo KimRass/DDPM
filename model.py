@@ -48,6 +48,8 @@ class TimeEmbedder(nn.Module):
         )
 
     def forward(self, diffusion_step):
+        print(diffusion_step)
+        print(diffusion_step - 1)
         x = torch.index_select(
             self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step - 1,
         )
@@ -551,6 +553,9 @@ if __name__ == "__main__":
     )
     noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
     diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=DEVICE)
+    # torch.index_select(
+    #     model.net.time_embed.pe_mat.to(DEVICE), dim=0, index=diffusion_step - 1,
+    # ).shape
     model.net(noisy_image, diffusion_step).shape
     # with torch.inference_mode():
     #     model.sample(batch_size=4)
