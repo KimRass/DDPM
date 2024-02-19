@@ -145,7 +145,10 @@ class Trainer(object):
 
     def train(self, n_epochs, model, optim, scaler):
         model = torch.compile(model)
-        self.test_sampling(epoch=0, model=model, batch_size=4)
+        # self.test_sampling(epoch=0, model=model, batch_size=4)
+        noisy_image = torch.randn((4, 3, 32, 32), device=self.device)
+        diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=self.device)
+        print(model.net(noisy_image, diffusion_step).shape)
 
         init_epoch = 0
         min_val_loss = math.inf

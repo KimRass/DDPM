@@ -431,7 +431,7 @@ class DDPM(nn.Module):
     @torch.inference_mode()
     def denoise(self, noisy_image, cur_diffusion_step):
         diffusion_step = self.batchify_diffusion_steps(
-            cur_diffusion_step, batch_size=noisy_image.size(0),
+            cur_diffusion_step=cur_diffusion_step, batch_size=noisy_image.size(0),
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
@@ -447,10 +447,8 @@ class DDPM(nn.Module):
         mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
         )
-        print("A")
         if cur_diffusion_step > 1:
             var = self.index(self.beta, diffusion_step=diffusion_step)
-            print(var)
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
             return mean + (var ** 0.5) * random_noise
         return mean
@@ -492,7 +490,9 @@ class DDPM(nn.Module):
     def interpolate(
         self, ori_image1, ori_image2, interpolate_at=500, n_points=10, image_to_grid=True,
     ):
-        diffusion_step = self.batchify_diffusion_steps(interpolate_at, batch_size=1)
+        diffusion_step = self.batchify_diffusion_steps(
+            cur_diffusion_step=interpolate_at, batch_size=1,
+        )
         _, noisy_image1 = self.get_noise_and_noisy_image(
             ori_image=ori_image1, diffusion_step=diffusion_step,
         )
@@ -547,8 +547,11 @@ if __name__ == "__main__":
         n_blocks=2,
         device=DEVICE,
     )
-    with torch.inference_mode():
-        model.sample(batch_size=4)
+    noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
+    diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=DEVICE)
+    model.net(noisy_image, diffusion_step).shape
+    # with torch.inference_mode():
+    #     model.sample(batch_size=4)
     
 
     # x = torch.randn(4, 3, 64, 64)
