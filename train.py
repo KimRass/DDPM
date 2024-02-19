@@ -185,9 +185,9 @@ def main():
 
     model = DDPM(
         img_size=args.IMG_SIZE,
-        init_channels=32,
+        init_channels=64,
         channels=(64, 128, 256, 512),
-        attns=(False, True, False, False),
+        attns=(False, False, True, False),
         n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )
