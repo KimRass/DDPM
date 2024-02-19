@@ -182,11 +182,6 @@ def main():
     args = get_args()
     set_seed(args.SEED)
     print(f"[ DEVICE: {DEVICE} ]")
-    noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
-    diffusion_step = torch.full(size=(4,), fill_value=999, dtype=torch.long, device=DEVICE)
-    print(model.net(noisy_image, diffusion_step).shape)
-    diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=DEVICE)
-    print(model.net(noisy_image, diffusion_step).shape)
 
     gc.collect()
     if DEVICE.type == "cuda":
@@ -216,6 +211,11 @@ def main():
         n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )
+    noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
+    diffusion_step = torch.full(size=(4,), fill_value=999, dtype=torch.long, device=DEVICE)
+    print(model.net(noisy_image, diffusion_step).shape)
+    diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=DEVICE)
+    print(model.net(noisy_image, diffusion_step).shape)
     print_n_prams(model)
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
