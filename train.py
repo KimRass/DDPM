@@ -85,9 +85,10 @@ class Trainer(object):
                 loss.backward()
                 optim.step()
         train_loss = cum_train_loss / len(self.train_dl)
-        for name, model_param in model.named_parameters():
-            if torch.any(torch.isnan(model_param.grad)):
-                print(name)
+        if torch.any(torch.isnan(loss)):
+            for name, model_param in model.named_parameters():
+                if torch.any(torch.isnan(model_param.grad)):
+                    print(name)
         return train_loss
 
     @torch.inference_mode()

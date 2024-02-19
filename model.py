@@ -441,8 +441,8 @@ class DDPM(nn.Module):
         #     ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         # )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        # return F.mse_loss(pred_noise, random_noise, reduction="mean")
-        loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
+        return F.mse_loss(pred_noise, random_noise, reduction="mean")
+        # loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
         # if torch.any(torch.isnan(loss)):
         #     print(noisy_image)
         #     print(pred_noise)
