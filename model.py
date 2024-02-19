@@ -48,7 +48,9 @@ class TimeEmbedder(nn.Module):
         )
 
     def forward(self, diffusion_step):
-        x = self.pe_mat.to(diffusion_step.device)[diffusion_step - 1, :]
+        x = torch.index_select(
+            self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step - 1,
+        )
         return self.layers(x)
 
 
