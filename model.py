@@ -435,9 +435,9 @@ class DDPM(nn.Module):
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        # print(diffusion_step)
-        # print(alpha_t)
-        # print(alpha_bar_t)
+        print(diffusion_step)
+        print(alpha_t)
+        print(alpha_bar_t)
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         # print(cur_diffusion_step, pred_noise.min(), pred_noise.max())
         # # ["Algorithm 2-4:
@@ -449,6 +449,7 @@ class DDPM(nn.Module):
         )
         if cur_diffusion_step > 1:
             var = self.index(self.beta, diffusion_step=diffusion_step)
+            print(var)
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
             return mean + (var ** 0.5) * random_noise
         return mean
@@ -456,10 +457,10 @@ class DDPM(nn.Module):
     @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
-        # print(x.min(), x.max())
         pbar = tqdm(range(self.n_diffusion_steps, 0, -1), leave=False)
         for cur_diffusion_step in pbar:
             pbar.set_description("Sampling...")
+
             x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
         return x
 
