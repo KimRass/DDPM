@@ -145,7 +145,6 @@ class Trainer(object):
 
     def train(self, n_epochs, model, optim, scaler):
         model = torch.compile(model)
-        # self.test_sampling(epoch=0, model=model, batch_size=4)
 
         init_epoch = 0
         min_val_loss = math.inf
@@ -189,19 +188,19 @@ def main():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.synchronize()
 
-    # train_dl, val_dl, _ = get_dls(
-    #     data_dir=args.DATA_DIR,
-    #     img_size=args.IMG_SIZE,
-    #     batch_size=args.BATCH_SIZE,
-    #     n_cpus=args.N_CPUS,
-    # )
-    # trainer = Trainer(
-    #     run_id=args.RUN_ID,
-    #     train_dl=train_dl,
-    #     val_dl=val_dl,
-    #     save_dir=args.SAVE_DIR,
-    #     device=DEVICE,
-    # )
+    train_dl, val_dl, _ = get_dls(
+        data_dir=args.DATA_DIR,
+        img_size=args.IMG_SIZE,
+        batch_size=args.BATCH_SIZE,
+        n_cpus=args.N_CPUS,
+    )
+    trainer = Trainer(
+        run_id=args.RUN_ID,
+        train_dl=train_dl,
+        val_dl=val_dl,
+        save_dir=args.SAVE_DIR,
+        device=DEVICE,
+    )
 
     model = DDPM(
         img_size=args.IMG_SIZE,
@@ -211,12 +210,6 @@ def main():
         n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )
-    noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
-    diffusion_step = torch.full(size=(4,), fill_value=999, dtype=torch.long, device=DEVICE)
-    print(model.net(noisy_image, diffusion_step).shape)
-    noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
-    diffusion_step = torch.full(size=(4,), fill_value=1000, dtype=torch.long, device=DEVICE)
-    print(model.net(noisy_image, diffusion_step).shape)
     print_n_prams(model)
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
