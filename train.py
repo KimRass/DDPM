@@ -85,9 +85,14 @@ class Trainer(object):
                 loss.backward()
                 optim.step()
             if torch.any(torch.isnan(loss)):
+                for name, model_param in model.named_parameters():
+                    if torch.any(torch.isnan(model_param.grad)):
+                        print(name)
+
                 ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
                 save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
                 print("nan loss!!!!")
+                return
         train_loss = cum_train_loss / len(self.train_dl)
         return train_loss
 
