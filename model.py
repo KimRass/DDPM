@@ -381,15 +381,13 @@ class DDPM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return x[diffusion_step - 1][:, None, None, None]
+        return torch.index_select(x, dim=0, index=diffusion_step - 1)[:, None, None, None]
 
     def sample_noise(self, batch_size):
         return torch.randn(
             size=(batch_size, self.n_channels, self.img_size, self.img_size),
             device=self.device,
         )
-    random_noise = torch.randn(size=(16, 3, 32, 32))
-    random_noise.min(), random_noise.max()
 
     def sample_diffusion_step(self, batch_size):
         return torch.randint(
@@ -462,9 +460,7 @@ class DDPM(nn.Module):
         pbar = tqdm(range(self.n_diffusion_steps, 0, -1), leave=False)
         for cur_diffusion_step in pbar:
             pbar.set_description("Sampling...")
-
-            # print(x.min(), x.max())
-            x = self.denoise(noisy_image=x, cur_diffusion_step=cur_diffusion_step)
+            x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
         return x
 
     @staticmethod
@@ -478,7 +474,7 @@ class DDPM(nn.Module):
         with imageio.get_writer(save_path, mode="I") as writer:
             x = self.sample_noise(batch_size=batch_size)
             for cur_diffusion_step in range(self.n_diffusion_steps, 0, -1):
-                x = self.denoise(noisy_image=x, cur_diffusion_step=cur_diffusion_step)
+                x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
 
                 if cur_diffusion_step % (self.n_diffusion_steps // n_frames) == 0:
                     frame = self._get_frame(x)
@@ -564,13 +560,13 @@ if __name__ == "__main__":
     # )
     # out = model(x, t)
 
-    torch.full(
-        size=(16,),
-        fill_value=15,
-        dtype=torch.long,
-        device=DEVICE,
-    )
-    beta = torch.linspace(0.0001, 0.02, 1000, device=DEVICE)
-    alpha = 1 - beta
-    alpha[-10:]
-    alpha[-10].item()
+    # torch.full(
+    #     size=(16,),
+    #     fill_value=15,
+    #     dtype=torch.long,
+    #     device=DEVICE,
+    # )
+    # beta = torch.linspace(0.0001, 0.02, 1000, device=DEVICE)
+    # alpha = 1 - beta
+    # alpha[-10:]
+    # alpha[-10].item()

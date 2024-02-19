@@ -10,6 +10,6 @@ python3 ../train.py\
     --n_epochs=50\
     --batch_size=16\
     --lr=0.0003\
-    --n_cpus=0\
+    --n_cpus=1\
     --n_blocks=2\
     # --run_id="gorgeous-candles-21"\
