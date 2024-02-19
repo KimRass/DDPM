@@ -87,7 +87,9 @@ class Trainer(object):
             if torch.any(torch.isnan(loss)):
                 for name, model_param in model.named_parameters():
                     if torch.any(torch.isnan(model_param.grad)):
-                        print(name)
+                        print("nan", name)
+                    else:
+                        print("not nan", name)
 
                 ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
                 save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
