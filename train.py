@@ -86,7 +86,7 @@ class Trainer(object):
                 optim.step()
         train_loss = cum_train_loss / len(self.train_dl)
         if torch.any(torch.isnan(loss)):
-            gen_grid = image_to_grid(ori_image, n_cols=int(self.batch_size ** 0.5))
+            gen_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
             save_image(gen_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
             # for name, model_param in model.named_parameters():
             #     if torch.any(torch.isnan(model_param.grad)):
