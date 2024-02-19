@@ -145,7 +145,6 @@ class Trainer(object):
 
     def train(self, n_epochs, model, optim, scaler):
         model = torch.compile(model)
-        self.test_sampling(epoch=1, model=model, batch_size=4)
 
         init_epoch = 0
         min_val_loss = math.inf
@@ -153,8 +152,8 @@ class Trainer(object):
             start_time = time()
             # train_loss = 0
             train_loss = self.train_for_one_epoch(model=model, optim=optim, scaler=scaler)
-            # val_loss = self.validate(model)
-            val_loss = 0
+            val_loss = self.validate(model)
+            # val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)

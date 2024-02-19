@@ -49,7 +49,7 @@ class TimeEmbedder(nn.Module):
 
     def forward(self, diffusion_step):
         x = torch.index_select(
-            self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step - 1,
+            self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step,
         )
         return self.layers(x)
 
@@ -383,7 +383,7 @@ class DDPM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return torch.index_select(x, dim=0, index=diffusion_step - 1)[:, None, None, None]
+        return torch.index_select(x, dim=0, index=diffusion_step)[:, None, None, None]
 
     def sample_noise(self, batch_size):
         return torch.randn(
@@ -393,7 +393,7 @@ class DDPM(nn.Module):
 
     def sample_diffusion_step(self, batch_size):
         return torch.randint(
-            1, self.n_diffusion_steps + 1, size=(batch_size,), device=self.device,
+            0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
         )
 
     def batchify_diffusion_steps(self, cur_diffusion_step, batch_size):
@@ -423,7 +423,6 @@ class DDPM(nn.Module):
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
-        print(diffusion_step)
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         random_noise, noisy_image = self.get_noise_and_noisy_image(
             ori_image=ori_image, diffusion_step=diffusion_step,
@@ -438,11 +437,7 @@ class DDPM(nn.Module):
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        print(diffusion_step)
-        print(alpha_t)
-        print(alpha_bar_t)
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        # print(cur_diffusion_step, pred_noise.min(), pred_noise.max())
         # # ["Algorithm 2-4:
         # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
         # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
@@ -450,7 +445,7 @@ class DDPM(nn.Module):
         mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
         )
-        if cur_diffusion_step > 1:
+        if cur_diffusion_step > 0:
             var = self.index(self.beta, diffusion_step=diffusion_step)
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
             return mean + (var ** 0.5) * random_noise
@@ -459,7 +454,7 @@ class DDPM(nn.Module):
     @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
-        pbar = tqdm(range(self.n_diffusion_steps, 0, -1), leave=False)
+        pbar = tqdm(range(self.n_diffusion_steps - 1, -1, -1), leave=False)
         for cur_diffusion_step in pbar:
             pbar.set_description("Sampling...")
 
@@ -476,7 +471,7 @@ class DDPM(nn.Module):
     def progressively_sample(self, batch_size, save_path, n_frames=100):
         with imageio.get_writer(save_path, mode="I") as writer:
             x = self.sample_noise(batch_size=batch_size)
-            for cur_diffusion_step in range(self.n_diffusion_steps, 0, -1):
+            for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
                 x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
 
                 if cur_diffusion_step % (self.n_diffusion_steps // n_frames) == 0:
@@ -504,7 +499,7 @@ class DDPM(nn.Module):
         )
 
         x = self._linearly_interpolate(noisy_image1, noisy_image2, n_points=n_points)
-        for cur_diffusion_step in range(interpolate_at, 0, -1):
+        for cur_diffusion_step in range(interpolate_at - 1, -1, -1):
             x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
         gen_image = torch.cat([ori_image1, x, ori_image2], dim=0)
         if not image_to_grid:
