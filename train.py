@@ -71,9 +71,6 @@ class Trainer(object):
                 device_type=self.device.type, dtype=torch.float16,
             ) if self.device.type == "cuda" else contextlib.nullcontext():
                 loss = model.get_loss(ori_image)
-                # print(f"{loss.item():.3f}")
-                # if torch.any(torch.isnan(weight))
-                # model.layer.grad
             cum_train_loss += loss.item()
 
             optim.zero_grad()
@@ -88,6 +85,9 @@ class Trainer(object):
                 loss.backward()
                 optim.step()
         train_loss = cum_train_loss / len(self.train_dl)
+        for name, model_param in model.named_parameters():
+            if torch.any(torch.isnan(model_param.grad)):
+                print(name)
         return train_loss
 
     @torch.inference_mode()

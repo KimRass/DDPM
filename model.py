@@ -343,7 +343,8 @@ class DDPM(nn.Module):
         return torch.linspace(
             self.init_beta,
             self.fin_beta,
-            self.n_diffusion_steps + 1,
+            # self.n_diffusion_steps + 1,
+            self.n_diffusion_steps,
             device=self.device,
         ) # "$\beta_{t}$"
 
@@ -442,10 +443,10 @@ class DDPM(nn.Module):
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         # return F.mse_loss(pred_noise, random_noise, reduction="mean")
         loss = F.mse_loss(pred_noise, random_noise, reduction="mean")
-        if torch.any(torch.isnan(loss)):
-            print(noisy_image)
-            print(pred_noise)
-            return
+        # if torch.any(torch.isnan(loss)):
+        #     print(noisy_image)
+        #     print(pred_noise)
+        #     return
         return loss
 
     @torch.inference_mode()
