@@ -71,35 +71,58 @@ class Upsample(nn.Module):
         return self.layers(x)
 
 
-class AttnBlock(nn.Module):
-    def __init__(self, in_ch):
+# class ResConvSelfAttnBlock(nn.Module):
+#     def __init__(self, in_ch):
+#         super().__init__()
+#         self.group_norm = nn.GroupNorm(32, in_ch)
+#         self.proj_q = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+#         self.proj_k = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+#         self.proj_v = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+#         self.proj = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+
+#     def forward(self, x):
+#         B, C, H, W = x.shape
+#         h = self.group_norm(x)
+#         q = self.proj_q(h)
+#         k = self.proj_k(h)
+#         v = self.proj_v(h)
+
+#         q = q.permute(0, 2, 3, 1).view(B, H * W, C)
+#         k = k.view(B, C, H * W)
+#         w = torch.bmm(q, k) * (int(C) ** (-0.5))
+#         assert list(w.shape) == [B, H * W, H * W]
+#         w = F.softmax(w, dim=-1)
+
+#         v = v.permute(0, 2, 3, 1).view(B, H * W, C)
+#         h = torch.bmm(w, v)
+#         assert list(h.shape) == [B, H * W, C]
+#         h = h.view(B, H, W, C).permute(0, 3, 1, 2)
+#         h = self.proj(h)
+#         return x + h
+class ResConvSelfAttnBlock(nn.Module):
+    def __init__(self, channels, n_groups=32):
         super().__init__()
-        self.group_norm = nn.GroupNorm(32, in_ch)
-        self.proj_q = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.proj_k = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.proj_v = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.proj = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
+
+        self.gn = nn.GroupNorm(num_groups=n_groups, num_channels=channels)
+        self.qkv_proj = nn.Conv2d(channels, channels * 3, 1, 1, 0)
+        self.out_proj = nn.Conv2d(channels, channels, 1, 1, 0)
+        self.scale = channels ** (-0.5)
 
     def forward(self, x):
-        B, C, H, W = x.shape
-        h = self.group_norm(x)
-        q = self.proj_q(h)
-        k = self.proj_k(h)
-        v = self.proj_v(h)
+        b, c, h, w = x.shape
+        skip = x
 
-        q = q.permute(0, 2, 3, 1).view(B, H * W, C)
-        k = k.view(B, C, H * W)
-        w = torch.bmm(q, k) * (int(C) ** (-0.5))
-        assert list(w.shape) == [B, H * W, H * W]
-        w = F.softmax(w, dim=-1)
-
-        v = v.permute(0, 2, 3, 1).view(B, H * W, C)
-        h = torch.bmm(w, v)
-        assert list(h.shape) == [B, H * W, C]
-        h = h.view(B, H, W, C).permute(0, 3, 1, 2)
-        h = self.proj(h)
-
-        return x + h
+        x = self.gn(x)
+        x = self.qkv_proj(x)
+        q, k, v = torch.chunk(x, chunks=3, dim=1)
+        attn_score = torch.einsum(
+            "bci,bcj->bij", q.view((b, c, -1)), k.view((b, c, -1)),
+        ) * self.scale
+        attn_weight = F.softmax(attn_score, dim=2)        
+        x = torch.einsum("bij,bcj->bci", attn_weight, v.view((b, c, -1)))
+        x = x.view(b, c, h, w)
+        x = self.out_proj(x)
+        return x + skip
 
 
 class ResBlock(nn.Module):
@@ -125,7 +148,7 @@ class ResBlock(nn.Module):
         else:
             self.shortcut = nn.Identity()
         if attn:
-            self.attn = AttnBlock(out_ch)
+            self.attn = ResConvSelfAttnBlock(out_ch)
         else:
             self.attn = nn.Identity()
 
