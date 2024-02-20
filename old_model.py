@@ -352,10 +352,10 @@ class DDPM(nn.Module):
             ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        recon_image = self.reconstruct(
-            noisy_image=noisy_image, noise=pred_noise.detach(), diffusion_step=diffusion_step,
-        )
-        image_to_grid(recon_image, n_cols=int(recon_image.size(0) ** 0.5)).show()
+        # recon_image = self.reconstruct(
+        #     noisy_image=noisy_image, noise=pred_noise.detach(), diffusion_step=diffusion_step,
+        # )
+        # image_to_grid(recon_image, n_cols=int(recon_image.size(0) ** 0.5)).show()
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
 
     @torch.inference_mode()

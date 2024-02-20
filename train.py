@@ -24,7 +24,8 @@ from utils import (
     save_image,
 )
 from data import get_dls
-from model2 import DDPM
+# from model2 import DDPM
+from old_model import DDPM
 
 torch.set_printoptions(linewidth=70)
 
