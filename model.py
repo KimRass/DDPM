@@ -371,14 +371,14 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        self.net = UNet(
-            n_diffusion_steps=n_diffusion_steps,
-            init_channels=init_channels,
-            channels=channels,
-            attns=attns,
-            n_blocks=n_blocks,
-        ).to(device)
-        # self.net = labmlUNet().to(device)
+        # self.net = UNet(
+        #     n_diffusion_steps=n_diffusion_steps,
+        #     init_channels=init_channels,
+        #     channels=channels,
+        #     attns=attns,
+        #     n_blocks=n_blocks,
+        # ).to(device)
+        self.net = labmlUNet().to(device)
 
     @staticmethod
     def index(x, diffusion_step):
