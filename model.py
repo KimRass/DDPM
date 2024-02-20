@@ -312,22 +312,22 @@ class UNet(nn.Module):
                 x = layer(x)
             else:
                 x = layer(x, t)
-            # print(x.shape)
+            print(x.shape)
             xs.append(x)
 
         x = self.mid_block(x, t)
-        # print(x.shape)
+        print(x.shape)
 
         for layer in self.up_blocks:
             if isinstance(layer, Upsample):
                 x = layer(x)
             else:
                 x = layer(torch.cat([x, xs.pop()], dim=1), t)
-            # print(x.shape)
+            print(x.shape)
         assert len(xs) == 0
 
         x = self.fin_block(x)
-        # print(x.shape)
+        print(x.shape)
         return x
 
 
@@ -371,14 +371,14 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        self.net = UNet(
-            n_diffusion_steps=n_diffusion_steps,
-            init_channels=init_channels,
-            channels=channels,
-            attns=attns,
-            n_blocks=n_blocks,
-        ).to(device)
-        # self.net = labmlUNet().to(device)
+        # self.net = UNet(
+        #     n_diffusion_steps=n_diffusion_steps,
+        #     init_channels=init_channels,
+        #     channels=channels,
+        #     attns=attns,
+        #     n_blocks=n_blocks,
+        # ).to(device)
+        self.net = labmlUNet().to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -413,7 +413,7 @@ class DDPM(nn.Module):
         var = 1 - alpha_bar_t
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
         noisy_image = mean + (var ** 0.5) * random_noise
-        # return random_noise, torch.clip(noisy_image, min=-1, max=1)
+        noisy_image.clamp_(-1, 1)
         return random_noise, noisy_image
 
     def forward(self, noisy_image, diffusion_step):
@@ -452,8 +452,11 @@ class DDPM(nn.Module):
         if cur_diffusion_step > 0:
             var = beta_t
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
-            return mean + (var ** 0.5) * random_noise
-        return mean
+            denoised_image = mean + (var ** 0.5) * random_noise
+        else:
+            denoised_image = mean
+        denoised_image.clamp_(-1, 1)
+        return denoised_image
 
     @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
