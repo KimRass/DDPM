@@ -43,7 +43,6 @@ def dses_to_dls(train_ds, val_ds, test_ds, batch_size, n_cpus):
         train_ds,
         batch_size=batch_size,
         shuffle=True,
-        # shuffle=False,
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,

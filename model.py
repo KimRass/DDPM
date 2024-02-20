@@ -312,22 +312,22 @@ class UNet(nn.Module):
                 x = layer(x)
             else:
                 x = layer(x, t)
-            print(x.shape)
+            # print(x.shape)
             xs.append(x)
 
         x = self.mid_block(x, t)
-        print(x.shape)
+        # print(x.shape)
 
         for layer in self.up_blocks:
             if isinstance(layer, Upsample):
                 x = layer(x)
             else:
                 x = layer(torch.cat([x, xs.pop()], dim=1), t)
-            print(x.shape)
+            # print(x.shape)
         assert len(xs) == 0
 
         x = self.fin_block(x)
-        print(x.shape)
+        # print(x.shape)
         return x
 
 
@@ -371,14 +371,14 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        # self.net = UNet(
-        #     n_diffusion_steps=n_diffusion_steps,
-        #     init_channels=init_channels,
-        #     channels=channels,
-        #     attns=attns,
-        #     n_blocks=n_blocks,
-        # ).to(device)
-        self.net = labmlUNet().to(device)
+        self.net = UNet(
+            n_diffusion_steps=n_diffusion_steps,
+            init_channels=init_channels,
+            channels=channels,
+            attns=attns,
+            n_blocks=n_blocks,
+        ).to(device)
+        # self.net = labmlUNet().to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -413,7 +413,6 @@ class DDPM(nn.Module):
         var = 1 - alpha_bar_t
         random_noise = self.sample_noise(batch_size=ori_image.size(0))
         noisy_image = mean + (var ** 0.5) * random_noise
-        noisy_image.clamp_(-1, 1)
         return random_noise, noisy_image
 
     def forward(self, noisy_image, diffusion_step):
@@ -443,10 +442,10 @@ class DDPM(nn.Module):
         # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
         # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
         # + \sigma_{t}z"$
-        # mean = (1 / (alpha_t ** 0.5)) * (
-        #     noisy_image - (beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise
-        # )
-        mean = (1 / (alpha_t ** 0.5)) * (noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise)
+        mean = (1 / (alpha_t ** 0.5)) * (
+            noisy_image - (beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise
+        )
+        # mean = (1 / (alpha_t ** 0.5)) * (noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise)
         # print(mean.mean().item(), mean.std().item())
         # print(cur_diffusion_step, mean.min(), mean.max())
         if cur_diffusion_step > 0:

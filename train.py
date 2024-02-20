@@ -90,17 +90,18 @@ class Trainer(object):
                 scaler.update()
             else:
                 optim.step()
-            # if torch.any(torch.isnan(loss)):
-            #     for name, model_param in model.named_parameters():
-            #         if torch.any(torch.isnan(model_param.grad)):
-            #             print("nan", name)
-            #         else:
-            #             print("not nan", name)
+            if torch.any(torch.isnan(loss)):
+                for name, model_param in model.named_parameters():
+                    if torch.any(torch.isnan(model_param.grad)):
+                        print("nan", name)
+                    else:
+                        print("not nan", name)
 
-            #     ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
-            #     save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
-            #     print("nan loss!!!!")
-            #     return
+                ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
+                save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
+                print("nan loss!!!!")
+                return
+
         train_loss = cum_train_loss / len(self.train_dl)
         return train_loss
 
@@ -137,15 +138,12 @@ class Trainer(object):
     @torch.inference_mode()
     def test_sampling(self, epoch, model, batch_size):
         gen_image = model.sample(batch_size=batch_size)
-        # print(gen_image)
-        print(gen_image.mean().item(), gen_image.std().item())
         gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
 
     def train(self, n_epochs, model, optim, scaler):
         model = torch.compile(model)
-        self.test_sampling(epoch=0, model=model, batch_size=4)
 
         init_epoch = 0
         min_val_loss = math.inf
@@ -157,16 +155,16 @@ class Trainer(object):
             val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
-                self.save_model_params(model=model, save_path=model_params_path)
+                # self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
 
-            self.save_ckpt(
-                epoch=epoch,
-                model=model,
-                optim=optim,
-                min_val_loss=min_val_loss,
-                scaler=scaler,
-            )
+            # self.save_ckpt(
+            #     epoch=epoch,
+            #     model=model,
+            #     optim=optim,
+            #     min_val_loss=min_val_loss,
+            #     scaler=scaler,
+            # )
 
             self.test_sampling(epoch=epoch, model=model, batch_size=4)
 
@@ -206,7 +204,7 @@ def main():
     model = DDPM(
         img_size=args.IMG_SIZE,
         init_channels=64,
-        channels=(64, 128, 256, 512),
+        channels=(64, 128, 256, 1024),
         attns=(False, True, False, False),
         n_blocks=args.N_BLOCKS,
         device=DEVICE,

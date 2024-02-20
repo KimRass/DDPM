@@ -373,12 +373,12 @@ class labmlUNet(nn.Module):
         # First half of U-Net
         for m in self.down:
             x = m(x, t)
-            # print(x.shape)
+            print(x.shape)
             h.append(x)
 
         # Middle (bottom)
         x = self.middle(x, t)
-        # print(x.shape)
+        print(x.shape)
 
         # Second half of U-Net
         for m in self.up:
@@ -390,7 +390,7 @@ class labmlUNet(nn.Module):
                 x = torch.cat((x, s), dim=1)
                 #
                 x = m(x, t)
-            # print(x.shape)
+            print(x.shape)
 
         # Final normalization and convolution
         return self.final(self.act(self.norm(x)))
