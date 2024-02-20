@@ -90,17 +90,17 @@ class Trainer(object):
                 scaler.update()
             else:
                 optim.step()
-            if torch.any(torch.isnan(loss)):
-                for name, model_param in model.named_parameters():
-                    if torch.any(torch.isnan(model_param.grad)):
-                        print("nan", name)
-                    else:
-                        print("not nan", name)
+            # if torch.any(torch.isnan(loss)):
+            #     for name, model_param in model.named_parameters():
+            #         if torch.any(torch.isnan(model_param.grad)):
+            #             print("nan", name)
+            #         else:
+            #             print("not nan", name)
 
-                ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
-                save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
-                print("nan loss!!!!")
-                return
+            #     ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
+            #     save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
+            #     print("nan loss!!!!")
+            #     return
         train_loss = cum_train_loss / len(self.train_dl)
         return train_loss
 
@@ -138,7 +138,7 @@ class Trainer(object):
     def test_sampling(self, epoch, model, batch_size):
         gen_image = model.sample(batch_size=batch_size)
         # print(gen_image)
-        # print(gen_image.min(), gen_image.max())
+        print(gen_image.mean().item(), gen_image.std().item())
         gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
@@ -152,8 +152,8 @@ class Trainer(object):
             start_time = time()
             # train_loss = 0
             train_loss = self.train_for_one_epoch(model=model, optim=optim, scaler=scaler)
-            val_loss = self.validate(model)
-            # val_loss = 0
+            # val_loss = self.validate(model)
+            val_loss = 0
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
                 self.save_model_params(model=model, save_path=model_params_path)

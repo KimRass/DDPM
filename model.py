@@ -106,7 +106,7 @@ class ResBlock(nn.Module):
         )
 
         if in_channels != out_channels:
-            self.shortcut = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
+            self.conv = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
 
     def forward(self, x, t):
         x1 = self.layers1(x)
@@ -116,7 +116,7 @@ class ResBlock(nn.Module):
         x1 = x1 + self.time_proj(t)[:, :, None, None]
         x1 = self.layers2(x1)
         if self.in_channels != self.out_channels:
-            return x1 + self.shortcut(x)
+            return x1 + self.conv(x)
         return x1 + x
 
 
@@ -230,15 +230,14 @@ class UNet(nn.Module):
 
         assert len(attns) == len(channels)
 
-        self.time_channels = channels[0] * 4
-
         self.init_conv = nn.Conv2d(3, init_channels, 3, 1, 1)
 
+        self.time_channels = init_channels * 4
         self.time_embed = TimeEmbedder(
             n_diffusion_steps=n_diffusion_steps, time_channels=self.time_channels,
         )
 
-        channels = [init_channels] + list(channels)
+        channels = (init_channels, *channels)
         self.down_blocks = nn.ModuleList()
         for idx in range(len(channels) - 1):
             in_channels = channels[idx]
@@ -436,17 +435,22 @@ class DDPM(nn.Module):
             cur_diffusion_step=cur_diffusion_step, batch_size=noisy_image.size(0),
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
+        beta_t = self.index(self.beta, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        pred_noise = self(noisy_image=noisy_image.detach(), diffusion_step=diffusion_step)
+        # print(pred_noise.mean().item(), pred_noise.std().item())
         # # ["Algorithm 2-4:
         # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
         # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
         # + \sigma_{t}z"$
-        mean = (1 / (alpha_t ** 0.5)) * (
-            noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise
-        )
+        # mean = (1 / (alpha_t ** 0.5)) * (
+        #     noisy_image - (beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise
+        # )
+        mean = (1 / (alpha_t ** 0.5)) * (noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise)
+        # print(mean.mean().item(), mean.std().item())
+        # print(cur_diffusion_step, mean.min(), mean.max())
         if cur_diffusion_step > 0:
-            var = self.index(self.beta, diffusion_step=diffusion_step)
+            var = beta_t
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
             return mean + (var ** 0.5) * random_noise
         return mean
@@ -454,11 +458,14 @@ class DDPM(nn.Module):
     @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
+        # print(x.mean(), x.std())
         pbar = tqdm(range(self.n_diffusion_steps - 1, -1, -1), leave=False)
         for cur_diffusion_step in pbar:
             pbar.set_description("Sampling...")
 
+        # for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
             x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
+            # print(x.mean().item(), x.std().item())
         return x
 
     @staticmethod
@@ -534,46 +541,46 @@ class DDPM(nn.Module):
             )
 
 
-if __name__ == "__main__":
-    DEVICE = torch.device("mps")
+# if __name__ == "__main__":
+#     DEVICE = torch.device("mps")
     
-    model = DDPM(
-        img_size=32,
-        init_channels=32,
-        channels=(32, 64, 128, 256),
-        attns=(False, False, True, False),
-        n_blocks=2,
-        device=DEVICE,
-    )
-    noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
-    # for i in range(1, 1001):
-    diffusion_step = torch.full(size=(4,), fill_value=0, dtype=torch.long, device=DEVICE)
-    # torch.index_select(
-    #     model.net.time_embed.pe_mat.to(DEVICE), dim=0, index=diffusion_step - 1,
-    # ).shape
-    model.net(noisy_image, diffusion_step).shape
-    # with torch.inference_mode():
-    #     model.sample(batch_size=4)
+#     model = DDPM(
+#         img_size=32,
+#         init_channels=32,
+#         channels=(32, 64, 128, 256),
+#         attns=(False, False, True, False),
+#         n_blocks=2,
+#         device=DEVICE,
+#     )
+#     noisy_image = torch.randn((4, 3, 32, 32), device=DEVICE)
+#     # for i in range(1, 1001):
+#     diffusion_step = torch.full(size=(4,), fill_value=0, dtype=torch.long, device=DEVICE)
+#     # torch.index_select(
+#     #     model.net.time_embed.pe_mat.to(DEVICE), dim=0, index=diffusion_step - 1,
+#     # ).shape
+#     model.net(noisy_image, diffusion_step).shape
+#     # with torch.inference_mode():
+#     #     model.sample(batch_size=4)
     
 
-    # x = torch.randn(4, 3, 64, 64)
-    # t = torch.randint(0, 1000, size=(4,))
+#     # x = torch.randn(4, 3, 64, 64)
+#     # t = torch.randint(0, 1000, size=(4,))
 
-    # model = UNet(
-    #     n_diffusion_steps=1000,
-    #     channels=(32, 64, 128, 256, 512),
-    #     attns=(False, False, True, False),
-    #     n_blocks=2,
-    # )
-    # out = model(x, t)
+#     # model = UNet(
+#     #     n_diffusion_steps=1000,
+#     #     channels=(32, 64, 128, 256, 512),
+#     #     attns=(False, False, True, False),
+#     #     n_blocks=2,
+#     # )
+#     # out = model(x, t)
 
-    # torch.full(
-    #     size=(16,),
-    #     fill_value=15,
-    #     dtype=torch.long,
-    #     device=DEVICE,
-    # )
-    # beta = torch.linspace(0.0001, 0.02, 1000, device=DEVICE)
-    # alpha = 1 - beta
-    # alpha[-10:]
-    # alpha[-10].item()
+#     # torch.full(
+#     #     size=(16,),
+#     #     fill_value=15,
+#     #     dtype=torch.long,
+#     #     device=DEVICE,
+#     # )
+#     # beta = torch.linspace(0.0001, 0.02, 1000, device=DEVICE)
+#     # alpha = 1 - beta
+#     # alpha[-10:]
+#     # alpha[-10].item()

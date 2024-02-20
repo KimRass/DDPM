@@ -42,8 +42,8 @@ def dses_to_dls(train_ds, val_ds, test_ds, batch_size, n_cpus):
     train_dl = DataLoader(
         train_ds,
         batch_size=batch_size,
-        # shuffle=True,
-        shuffle=False,
+        shuffle=True,
+        # shuffle=False,
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,
@@ -73,7 +73,7 @@ def dses_to_dls(train_ds, val_ds, test_ds, batch_size, n_cpus):
 def get_dls(data_dir, img_size, batch_size, n_cpus):
     # from torch.utils.data import Subset
     train_ds = CelebADS(data_dir=data_dir, split="train", img_size=img_size, hflip=True)
-    # train_ds = Subset(train_ds, range(batch_size * 10))
+    # train_ds = Subset(train_ds, range(batch_size))
     val_ds = CelebADS(data_dir=data_dir, split="valid", img_size=img_size, hflip=False)
     test_ds = CelebADS(data_dir=data_dir, split="test", img_size=img_size, hflip=False)
     return dses_to_dls(

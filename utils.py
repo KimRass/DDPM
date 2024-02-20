@@ -69,10 +69,10 @@ def get_elapsed_time(start_time):
     return timedelta(seconds=round(time() - start_time))
 
 
-def denorm(tensor):
-    tensor /= 2
-    tensor += 0.5
-    return tensor
+def denorm(x, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
+    return TF.normalize(
+        x, mean=-(np.array(mean) / np.array(std)), std=(1 / np.array(std)),
+    )
 
 
 def image_to_grid(image, n_cols):
