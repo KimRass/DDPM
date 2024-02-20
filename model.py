@@ -404,16 +404,17 @@ class DDPM(nn.Module):
         )
 
     # Forward (diffusion) process
-    def get_noise_and_noisy_image(self, ori_image, diffusion_step):
+    def get_noisy_image(self, ori_image, diffusion_step, random_noise=None):
         # "$\bar{\alpha_{t}}$"
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         # $\sqrt{\bar{\alpha_{t}}}x_{0}$
         mean = (alpha_bar_t ** 0.5) * ori_image
         # $(1 - \bar{\alpha_{t}})\mathbf{I}$
         var = 1 - alpha_bar_t
-        random_noise = self.sample_noise(batch_size=ori_image.size(0))
+        if random_noise is None:
+            random_noise = self.sample_noise(batch_size=ori_image.size(0))
         noisy_image = mean + (var ** 0.5) * random_noise
-        return random_noise, noisy_image
+        return noisy_image
 
     def forward(self, noisy_image, diffusion_step):
         return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
@@ -421,9 +422,10 @@ class DDPM(nn.Module):
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
+        random_noise = self.sample_noise(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-        random_noise, noisy_image = self.get_noise_and_noisy_image(
-            ori_image=ori_image, diffusion_step=diffusion_step,
+        noisy_image = self.get_noisy_image(
+            ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
@@ -437,17 +439,14 @@ class DDPM(nn.Module):
         beta_t = self.index(self.beta, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         pred_noise = self(noisy_image=noisy_image.detach(), diffusion_step=diffusion_step)
-        # print(pred_noise.mean().item(), pred_noise.std().item())
         # # ["Algorithm 2-4:
         # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
         # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
         # + \sigma_{t}z"$
         mean = (1 / (alpha_t ** 0.5)) * (
-            noisy_image - (beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise
+            noisy_image - ((beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise)
         )
         # mean = (1 / (alpha_t ** 0.5)) * (noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise)
-        # print(mean.mean().item(), mean.std().item())
-        # print(cur_diffusion_step, mean.min(), mean.max())
         if cur_diffusion_step > 0:
             var = beta_t
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
@@ -460,14 +459,12 @@ class DDPM(nn.Module):
     @torch.inference_mode()
     def sample(self, batch_size): # Reverse (denoising) process
         x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
-        # print(x.mean(), x.std())
         pbar = tqdm(range(self.n_diffusion_steps - 1, -1, -1), leave=False)
         for cur_diffusion_step in pbar:
             pbar.set_description("Sampling...")
 
         # for cur_diffusion_step in range(self.n_diffusion_steps - 1, -1, -1):
             x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
-            # print(x.mean().item(), x.std().item())
         return x
 
     @staticmethod
@@ -500,11 +497,12 @@ class DDPM(nn.Module):
         diffusion_step = self.batchify_diffusion_steps(
             cur_diffusion_step=interpolate_at, batch_size=1,
         )
-        _, noisy_image1 = self.get_noise_and_noisy_image(
-            ori_image=ori_image1, diffusion_step=diffusion_step,
+        random_noise = self.sample_noise(batch_size=ori_image1.size(0))
+        noisy_image1 = self.get_noisy_image(
+            ori_image=ori_image1, diffusion_step=diffusion_step, random_noise=random_noise,
         )
-        _, noisy_image2 = self.get_noise_and_noisy_image(
-            ori_image=ori_image2, diffusion_step=diffusion_step,
+        noisy_image2 = self.get_noisy_image(
+            ori_image=ori_image2, diffusion_step=diffusion_step, random_noise=random_noise,
         )
 
         x = self._linearly_interpolate(noisy_image1, noisy_image2, n_points=n_points)
