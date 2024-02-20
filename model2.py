@@ -16,7 +16,6 @@ from pathlib import Path
 
 from utils import image_to_grid, save_image
 from model_labml import labmlUNet
-from old_model import OldUNet
 
 
 class Swish(nn.Module):
@@ -40,7 +39,7 @@ class TimeEmbedder(nn.Module):
         self.pe_mat[:, 0:: 2] = torch.sin(angle)
         self.pe_mat[:, 1:: 2] = torch.cos(angle)
 
-        # self.register_buffer("pos_enc_mat", self.pe_mat)
+        self.register_buffer("pos_enc_mat", self.pe_mat)
 
         self.layers = nn.Sequential(
             nn.Linear(self.d_model, time_channels),
@@ -372,14 +371,13 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        # self.net = UNet(
-        #     n_diffusion_steps=n_diffusion_steps,
-        #     init_channels=init_channels,
-        #     channels=channels,
-        #     attns=attns,
-        #     n_blocks=n_blocks,
-        # ).to(device)
-        self.net = OldUNet().to(device)
+        self.net = UNet(
+            n_diffusion_steps=n_diffusion_steps,
+            init_channels=init_channels,
+            channels=channels,
+            attns=attns,
+            n_blocks=n_blocks,
+        ).to(device)
         # self.net = labmlUNet().to(device)
 
     @staticmethod
@@ -396,9 +394,6 @@ class DDPM(nn.Module):
         return torch.randint(
             0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
         )
-        # return torch.randint(
-        #     0, self.n_diffusion_steps, size=(1,), device=self.device,
-        # ).repeat(batch_size)
 
     def batchify_diffusion_steps(self, cur_diffusion_step, batch_size):
         return torch.full(
@@ -406,52 +401,34 @@ class DDPM(nn.Module):
             fill_value=cur_diffusion_step,
             dtype=torch.long,
             device=self.device,
-        )  
+        )
 
-    def perform_diffusion_process(self, ori_image, diffusion_step, random_noise=None):
+    # Forward (diffusion) process
+    def forward(self, ori_image, diffusion_step, random_noise=None):
         # "$\bar{\alpha_{t}}$"
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        mean = (alpha_bar_t ** 0.5) * ori_image # $\sqrt{\bar{\alpha_{t}}}x_{0}$
-        var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+        # $\sqrt{\bar{\alpha_{t}}}x_{0}$
+        mean = (alpha_bar_t ** 0.5) * ori_image
+        # $(1 - \bar{\alpha_{t}})\mathbf{I}$
+        var = 1 - alpha_bar_t
         if random_noise is None:
             random_noise = self.sample_noise(batch_size=ori_image.size(0))
         noisy_image = mean + (var ** 0.5) * random_noise
         return noisy_image
 
-    def forward(self, noisy_image, diffusion_step):
-        # return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        return self.net(noisy_image, diffusion_step)
-
-    def get_loss(self, ori_image):
-        # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
-        diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
-        random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
-        noisy_image = self.perform_diffusion_process(
-            ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
-        )
-        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        # recon_image = self.reconstruct(
-        #     noisy_image=noisy_image, noise=pred_noise.detach(), diffusion_step=diffusion_step,
-        # )
-        # image_to_grid(recon_image, n_cols=int(recon_image.size(0) ** 0.5)).show()
-        return F.mse_loss(pred_noise, random_noise, reduction="mean")
+    def predict_noise(self, noisy_image, diffusion_step):
+        return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
     @torch.inference_mode()
-    def reconstruct(self, noisy_image, noise, diffusion_step):
-        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)
-
-    @torch.inference_mode()
-    def take_denoising_step(self, noisy_image, cur_diffusion_step):
+    def denoise(self, noisy_image, cur_diffusion_step):
         diffusion_step = self.batchify_diffusion_steps(
             cur_diffusion_step=cur_diffusion_step, batch_size=noisy_image.size(0),
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         beta_t = self.index(self.beta, diffusion_step=diffusion_step)
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        pred_noise = self(noisy_image=noisy_image.detach(), diffusion_step=diffusion_step)
-        # # "Algorithm 2-4:
+        pred_noise = self.net(noisy_image=noisy_image.detach(), diffusion_step=diffusion_step)
+        # # ["Algorithm 2-4:
         # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
         # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
         # + \sigma_{t}z"$
@@ -469,18 +446,11 @@ class DDPM(nn.Module):
         return denoised_image
 
     @torch.inference_mode()
-    def perform_denoising_process(self, noisy_image, cur_diffusion_step):
-        x = noisy_image
-        pbar = tqdm(range(cur_diffusion_step, -1, -1), leave=False)
-        for trg_diffusion_step in pbar:
-            pbar.set_description("Denoising...")
+    def sample(self, batch_size): # Reverse (denoising) process
+        x = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
+        pbar = tqdm(range(self.n_diffusion_steps - 1, -1, -1), leave=False)
+        for cur_diffusion_step in pbar:
+            pbar.set_description("Sampling...")
 
-            x = self.take_denoising_step(x, cur_diffusion_step=trg_diffusion_step)
+            x = self.denoise(x, cur_diffusion_step=cur_diffusion_step)
         return x
-
-    @torch.inference_mode()
-    def sample(self, batch_size):
-        random_noise = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
-        return self.perform_denoising_process(
-            noisy_image=random_noise, cur_diffusion_step=self.n_diffusion_steps - 1,
-        )

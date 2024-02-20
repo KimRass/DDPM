@@ -24,7 +24,7 @@ from utils import (
     save_image,
 )
 from data import get_dls
-from model import DDPM
+from model2 import DDPM
 
 torch.set_printoptions(linewidth=70)
 
@@ -71,9 +71,16 @@ class Trainer(object):
             pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
+            # diffusion_step = model.sample_diffusion_step(batch_size=ori_image.size(0))
+            # random_noise = model.sample_noise(batch_size=ori_image.size(0))
             with torch.autocast(
                 device_type=self.device.type, dtype=torch.float16,
             ) if self.device.type == "cuda" else contextlib.nullcontext():
+                # noisy_image = model(
+                #     ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+                # )
+                # pred_noise = model.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
+                # loss =  F.mse_loss(pred_noise, random_noise, reduction="mean")
                 loss = model.get_loss(ori_image)
             cum_train_loss += loss.item()
 
@@ -143,7 +150,7 @@ class Trainer(object):
         save_image(gen_grid, save_path=sample_path)
 
     def train(self, n_epochs, model, optim, scaler):
-        model = torch.compile(model)
+        # model = torch.compile(model)
 
         init_epoch = 0
         min_val_loss = math.inf
