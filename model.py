@@ -310,8 +310,8 @@ class DDPM(nn.Module):
         init_channels,
         channels,
         attns,
-        device,
         n_blocks,
+        device,
         image_channels=3,
         n_diffusion_steps=1000,
         init_beta=0.0001,
@@ -341,7 +341,11 @@ class DDPM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return torch.index_select(x, dim=0, index=diffusion_step)[:, None, None, None]
+        return torch.index_select(
+            x,
+            dim=0,
+            index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
+        )[:, None, None, None]
 
     def sample_noise(self, batch_size):
         return torch.randn(
@@ -413,7 +417,6 @@ class DDPM(nn.Module):
             denoised_image = mean
         return denoised_image
 
-    @torch.inference_mode()
     def perform_denoising_process(self, noisy_image, diffusion_step_idx):
         x = noisy_image
         pbar = tqdm(range(diffusion_step_idx, -1, -1), leave=False)
@@ -423,7 +426,6 @@ class DDPM(nn.Module):
             x = self.take_denoising_step(x, diffusion_step_idx=trg_diffusion_step)
         return x
 
-    @torch.inference_mode()
     def sample(self, batch_size):
         random_noise = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
         return self.perform_denoising_process(
