@@ -73,8 +73,8 @@ class Trainer(object):
 
     def train_for_one_epoch(self, epoch, model, optim, scaler):
         train_loss = 0
-        pbar = enumerate(tqdm(self.train_dl, leave=False))
-        for step_idx, ori_image in pbar: # "$x_{0} \sim q(x_{0})$"
+        pbar = tqdm(self.train_dl, leave=False)
+        for step_idx, ori_image in enumerate(pbar): # "$x_{0} \sim q(x_{0})$"
             pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
