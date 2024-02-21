@@ -62,57 +62,38 @@ class Trainer(object):
         self.save_dir = Path(save_dir)
         self.device = device
 
-        self.ckpt_path = self.save_dir/"checkpoint.tar"
+        self.ckpt_path = self.save_dir/"ckpt.pth"
 
     def train_for_one_epoch(self, model, optim, scaler):
-        cum_train_loss = 0
+        train_loss = 0
         pbar = tqdm(self.train_dl, leave=False)
         for ori_image in pbar: # "$x_{0} \sim q(x_{0})$"
             pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
             loss = model.get_loss(ori_image)
-            cum_train_loss += loss.item()
+            train_loss += (loss.item() / len(self.train_dl))
 
             optim.zero_grad()
             if scaler is not None:
                 scaler.scale(loss).backward()
-            else:
-                loss.backward()
-            # torch_utils.clip_grad_norm_(
-            #     model.parameters(), max_norm=5, error_if_nonfinite=True,
-            # )
-            if scaler is not None:
                 scaler.step(optim)
                 scaler.update()
             else:
+                loss.backward()
                 optim.step()
-            # if torch.any(torch.isnan(loss)):
-            #     for name, model_param in model.named_parameters():
-            #         if torch.any(torch.isnan(model_param.grad)):
-            #             print("nan", name)
-            #         else:
-            #             print("not nan", name)
-
-            #     ori_grid = image_to_grid(ori_image, n_cols=int(ori_image.size(0) ** 0.5))
-            #     save_image(ori_grid, save_path=self.save_dir/"nan_loss_ori_image.jpg")
-            #     print("nan loss!!!!")
-            #     return
-
-        train_loss = cum_train_loss / len(self.train_dl)
         return train_loss
 
     @torch.inference_mode()
     def validate(self, model):
-        cum_val_loss = 0
+        val_loss = 0
         pbar = tqdm(self.val_dl, leave=False)
         for ori_image in pbar:
             pbar.set_description("Validating...")
 
             ori_image = ori_image.to(self.device)
             loss = model.get_loss(ori_image.detach())
-            cum_val_loss += loss.item()
-        val_loss = cum_val_loss / len(self.val_dl)
+            val_loss += (loss.item() / len(self.val_dl))
         return val_loss
 
     @staticmethod
@@ -140,28 +121,26 @@ class Trainer(object):
         save_image(gen_grid, save_path=sample_path)
 
     def train(self, n_epochs, model, optim, scaler):
-        # model = torch.compile(model)
+        model = torch.compile(model)
 
         init_epoch = 0
         min_val_loss = math.inf
         for epoch in range(init_epoch + 1, n_epochs + 1):
             start_time = time()
-            # train_loss = 0
             train_loss = self.train_for_one_epoch(model=model, optim=optim, scaler=scaler)
-            # val_loss = self.validate(model)
-            val_loss = 0
+            val_loss = self.validate(model)
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
-                # self.save_model_params(model=model, save_path=model_params_path)
+                self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
 
-            # self.save_ckpt(
-            #     epoch=epoch,
-            #     model=model,
-            #     optim=optim,
-            #     min_val_loss=min_val_loss,
-            #     scaler=scaler,
-            # )
+            self.save_ckpt(
+                epoch=epoch,
+                model=model,
+                optim=optim,
+                min_val_loss=min_val_loss,
+                scaler=scaler,
+            )
 
             self.test_sampling(epoch=epoch, model=model, batch_size=4)
 
@@ -201,8 +180,10 @@ def main():
     model = DDPM(
         img_size=args.IMG_SIZE,
         init_channels=128,
-        channels=(128, 256, 256, 256),
-        attns=(False, True, False, False),
+        # channels=(128, 256, 256, 256),
+        # attns=(False, True, False, False),
+        channels=(128, 256, 256, 512),
+        attns=(False, False, False, True),
         n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )

@@ -81,11 +81,12 @@ class ResConvSelfAttnBlock(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, time_channels, n_groups=32, drop_prob=0.1):
+    def __init__(self, in_channels, out_channels, time_channels, attn=False, n_groups=32, drop_prob=0.1):
         super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.attn = attn
 
         self.layers1 = nn.Sequential(
             # "We replaced weight normalization with group normalization
@@ -107,86 +108,24 @@ class ResBlock(nn.Module):
 
         if in_channels != out_channels:
             self.conv = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
+        else:
+            self.conv = nn.Identity()
+
+        if attn:
+            self.attn_block = ResConvSelfAttnBlock(out_channels)
+        else:
+            self.attn_block = nn.Identity()
 
     def forward(self, x, t):
-        x1 = self.layers1(x)
+        skip = x
+        x = self.layers1(x)
         # "Diffusion time $t$ is specified by adding the Transformer sinusoidal position embedding
         # into each residual block."
         # "We condition all layers on $t$ by adding in the Transformer sinusoidal position embedding."
-        x1 = x1 + self.time_proj(t)[:, :, None, None]
-        x1 = self.layers2(x1)
-        if self.in_channels != self.out_channels:
-            return x1 + self.conv(x)
-        return x1 + x
-
-
-class DownBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, time_channels, attn, n_groups=32):
-        super().__init__()
-
-        self.attn = attn
-
-        self.res_block = ResBlock(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            time_channels=time_channels,
-            n_groups=n_groups,
-        )
-        if attn:
-            self.attn_block = ResConvSelfAttnBlock(channels=out_channels)
-
-    def forward(self, x, t):
-        x = self.res_block(x, t)
-        if self.attn:
-            x = self.attn_block(x)
-        return x
-
-
-class MidBlock(nn.Module):
-    def __init__(self, channels, time_channels, n_groups=32):
-        super().__init__()
-
-        self.res_block1 = ResBlock(
-            in_channels=channels,
-            out_channels=channels,
-            time_channels=time_channels,
-            n_groups=n_groups,
-        )
-        self.attn_block = ResConvSelfAttnBlock(channels=channels)
-        self.res_block2 = ResBlock(
-            in_channels=channels,
-            out_channels=channels,
-            time_channels=time_channels,
-            n_groups=n_groups,
-        )
-
-    def forward(self, x, t):
-        x = self.res_block1(x, t)
-        x = self.attn_block(x)
-        x = self.res_block2(x, t)
-        return x
-
-
-class UpBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, time_channels, attn, n_groups=32):
-        super().__init__()
-
-        self.attn = attn
-
-        self.res_block = ResBlock(
-            in_channels=in_channels + out_channels,
-            out_channels=out_channels,
-            time_channels=time_channels,
-            n_groups=n_groups,
-        )
-        if attn:
-            self.attn_block = ResConvSelfAttnBlock(channels=out_channels)
-
-    def forward(self, x, t):
-        x = self.res_block(x, t)
-        if self.attn:
-            x = self.attn_block(x)
-        return x
+        x = x + self.time_proj(t)[:, :, None, None]
+        x = self.layers2(x)
+        x = x + self.conv(skip)
+        return self.attn_block(x)
 
 
 class Downsample(nn.Conv2d):
@@ -215,7 +154,6 @@ class UNet(nn.Module):
         # 4 8 16 32: 4
         # 8 16 32 64: 4
         # 8 16 32 64 128 256: 6
-        n_diffusion_steps=1000,
         init_channels=32,
         channels=(64, 128, 256, 512),
         # "All models have self-attention blocks at the 16 × 16 resolution
@@ -225,6 +163,7 @@ class UNet(nn.Module):
         # "All models have two convolutional residual blocks per resolution level."
         n_blocks=2,
         n_groups=32,
+        n_diffusion_steps=1000,
     ):
         super().__init__()
 
@@ -246,7 +185,7 @@ class UNet(nn.Module):
             for _ in range(n_blocks):
                 # print("Res", in_channels, out_channels)
                 self.down_blocks.append(
-                    DownBlock(
+                    ResBlock(
                         in_channels=in_channels,
                         out_channels=out_channels,
                         time_channels=self.time_channels,
@@ -260,8 +199,23 @@ class UNet(nn.Module):
                 # print("Down", out_channels)
                 self.down_blocks.append(Downsample(out_channels))
 
-        self.mid_block = MidBlock(
-            channels=out_channels, time_channels=self.time_channels, n_groups=n_groups,
+        self.mid_block = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=out_channels,
+                    out_channels=out_channels,
+                    time_channels=self.time_channels,
+                    attn=True,
+                    n_groups=n_groups,
+                ),
+                ResBlock(
+                    in_channels=out_channels,
+                    out_channels=out_channels,
+                    time_channels=self.time_channels,
+                    attn=False,
+                    n_groups=n_groups,
+                ),
+            ]
         )
         # print("Mid")
 
@@ -272,8 +226,8 @@ class UNet(nn.Module):
             for _ in range(n_blocks):
                 # print("Res", in_channels, out_channels)
                 self.up_blocks.append(
-                    UpBlock(
-                        in_channels=in_channels,
+                    ResBlock(
+                        in_channels=in_channels + out_channels,
                         out_channels=out_channels,
                         time_channels=self.time_channels,
                         attn=attn,
@@ -284,8 +238,8 @@ class UNet(nn.Module):
             out_channels = channels[idx - 1]
             # print("Res", in_channels, out_channels)
             self.up_blocks.append(
-                UpBlock(
-                    in_channels=in_channels,
+                ResBlock(
+                    in_channels=in_channels + out_channels,
                     out_channels=out_channels,
                     time_channels=self.time_channels,
                     attn=attn,
@@ -334,17 +288,6 @@ class UNet(nn.Module):
         x = self.fin_block(x)
         # print(x.shape)
         return x
-# new = UNet(
-#     n_diffusion_steps=1000,
-#     init_channels=128,
-#     channels=(128, 256, 256, 256),
-#     attns=(True, True, True, True),
-#     n_blocks=2,
-# )
-# print_n_params(new)
-# x = torch.randn(1, 3, 32, 32)
-# t = torch.randint(0, 1000, (1,))
-# new(x, t)
 
 
 class DDPM(nn.Module):
@@ -413,10 +356,10 @@ class DDPM(nn.Module):
         #     0, self.n_diffusion_steps, size=(1,), device=self.device,
         # ).repeat(batch_size)
 
-    def batchify_diffusion_steps(self, cur_diffusion_step, batch_size):
+    def batchify_diffusion_steps(self, diffusion_step_idx, batch_size):
         return torch.full(
             size=(batch_size,),
-            fill_value=cur_diffusion_step,
+            fill_value=diffusion_step_idx,
             dtype=torch.long,
             device=self.device,
         )  
@@ -432,8 +375,7 @@ class DDPM(nn.Module):
         return noisy_image
 
     def forward(self, noisy_image, diffusion_step):
-        # return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        return self.net(noisy_image, diffusion_step)
+        return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
@@ -450,9 +392,9 @@ class DDPM(nn.Module):
             return F.mse_loss(pred_noise, random_noise, reduction="mean")
 
     @torch.inference_mode()
-    def take_denoising_step(self, noisy_image, cur_diffusion_step):
+    def take_denoising_step(self, noisy_image, diffusion_step_idx):
         diffusion_step = self.batchify_diffusion_steps(
-            cur_diffusion_step=cur_diffusion_step, batch_size=noisy_image.size(0),
+            diffusion_step_idx=diffusion_step_idx, batch_size=noisy_image.size(0),
         )
         alpha_t = self.index(self.alpha, diffusion_step=diffusion_step)
         beta_t = self.index(self.beta, diffusion_step=diffusion_step)
@@ -465,7 +407,7 @@ class DDPM(nn.Module):
         mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - ((beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise)
         )
-        if cur_diffusion_step > 0:
+        if diffusion_step_idx > 0:
             var = beta_t
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
             denoised_image = mean + (var ** 0.5) * random_noise
@@ -474,23 +416,91 @@ class DDPM(nn.Module):
         return denoised_image
 
     @torch.inference_mode()
-    def perform_denoising_process(self, noisy_image, cur_diffusion_step):
+    def perform_denoising_process(self, noisy_image, diffusion_step_idx):
         x = noisy_image
-        pbar = tqdm(range(cur_diffusion_step, -1, -1), leave=False)
+        pbar = tqdm(range(diffusion_step_idx, -1, -1), leave=False)
         for trg_diffusion_step in pbar:
             pbar.set_description("Denoising...")
 
-            x = self.take_denoising_step(x, cur_diffusion_step=trg_diffusion_step)
+            x = self.take_denoising_step(x, diffusion_step_idx=trg_diffusion_step)
         return x
 
     @torch.inference_mode()
     def sample(self, batch_size):
         random_noise = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
         return self.perform_denoising_process(
-            noisy_image=random_noise, cur_diffusion_step=self.n_diffusion_steps - 1,
+            noisy_image=random_noise, diffusion_step_idx=self.n_diffusion_steps - 1,
         )
 
     @torch.inference_mode()
     def reconstruct(self, noisy_image, noise, diffusion_step):
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)
+
+    @staticmethod
+    def _get_frame(x):
+        b, _, _, _ = x.shape
+        grid = image_to_grid(x, n_cols=int(b ** 0.5))
+        frame = np.array(grid)
+        return frame
+
+    def vis_denoising_process(self, batch_size, save_path, n_frames=100):
+        with imageio.get_writer(save_path, mode="I") as writer:
+            x = self.sample_noise(batch_size=batch_size)
+            for diffusion_step_idx in range(self.n_diffusion_steps, 0, -1):
+                x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
+
+                if diffusion_step_idx % (self.n_diffusion_steps // n_frames) == 0:
+                    frame = self._get_frame(x)
+                    writer.append_data(frame)
+
+    @staticmethod
+    def _interpolate_between_images(x, y, n_points):
+        _, b, c, d = x.shape
+        lambs = torch.linspace(start=0, end=1, steps=n_points)
+        lambs = lambs[:, None, None, None].expand(n_points, b, c, d)
+        return ((1 - lambs) * x + lambs * y)
+
+    def interpolate(
+        self, ori_image1, ori_image2, interpolate_at=500, n_points=10,
+    ):
+        diffusion_step = self.batchify_diffusion_steps(interpolate_at, batch_size=1)
+        noisy_image1 = self.perform_diffusion_process(
+            ori_image=ori_image1, diffusion_step=diffusion_step,
+        )
+        noisy_image2 = self.perform_diffusion_process(
+            ori_image=ori_image2, diffusion_step=diffusion_step,
+        )
+
+        x = self._interpolate_between_images(noisy_image1, noisy_image2, n_points=n_points)
+        for diffusion_step_idx in range(interpolate_at, 0, -1):
+            x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
+        return torch.cat([ori_image1, x, ori_image2], dim=0)
+
+    def coarse_to_fine_interpolate(self, ori_image1, ori_image2, n_rows=9, n_points=10):
+        rows = list()
+        for interpolate_at in range(
+            self.n_diffusion_steps, -1, - self.n_diffusion_steps // (n_rows - 1),
+        ):
+            row = self.interpolate(
+                ori_image1=ori_image1,
+                ori_image2=ori_image2,
+                interpolate_at=interpolate_at,
+                n_points=n_points,
+            )
+            rows.append(row)
+        return torch.cat(rows, dim=0)
+
+
+if __name__ == "__main__":
+    new = UNet(
+        n_diffusion_steps=1000,
+        init_channels=128,
+        channels=(128, 256, 256, 256),
+        attns=(True, True, True, True),
+        n_blocks=2,
+    )
+    print_n_params(new)
+    x = torch.randn(1, 3, 32, 32)
+    t = torch.randint(0, 1000, (1,))
+    new(x, t)
