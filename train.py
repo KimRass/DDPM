@@ -41,6 +41,7 @@ def get_args():
     parser.add_argument("--img_size", type=int, required=True)
     parser.add_argument("--channels", type=int, required=True)
     parser.add_argument("--channel_mults", type=str, required=True)
+    parser.add_argument("--attns", type=str, required=True)
     parser.add_argument("--n_res_blocks", type=int, default=2, required=False)
 
     parser.add_argument("--run_id", type=str, required=False)
@@ -194,7 +195,7 @@ def main():
         img_size=args.IMG_SIZE,
         channels=args.CHANNELS,
         channel_mults=eval(args.CHANNEL_MULTS),
-        attns=(False, True, False, False),
+        attns=eval(args.ATTRNS),
         n_res_blocks=args.N_RES_BLOCKS,
         device=DEVICE,
     )
