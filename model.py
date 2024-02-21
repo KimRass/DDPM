@@ -244,8 +244,8 @@ class UNet(nn.Module):
             in_channels = channels[idx]
             out_channels = channels[idx + 1]
             attn=attns[idx]
-            # print(in_channels, out_channels, attn)
             for _ in range(n_blocks):
+                # print("Res", in_channels, out_channels)
                 self.down_blocks.append(
                     DownBlock(
                         in_channels=in_channels,
@@ -258,18 +258,20 @@ class UNet(nn.Module):
                 in_channels = out_channels
 
             if idx < len(channels) - 2:
+                # print("Down", out_channels)
                 self.down_blocks.append(Downsample(out_channels))
 
         self.mid_block = MidBlock(
             channels=out_channels, time_channels=self.time_channels, n_groups=n_groups,
         )
+        # print("Mid")
 
         self.up_blocks = nn.ModuleList()
         for idx in list(reversed(range(1, len(channels)))):
             out_channels = in_channels
             attn = attns[idx - 1]
-            # print(in_channels, out_channels, attn)
             for _ in range(n_blocks):
+                # print("Res", in_channels, out_channels)
                 self.up_blocks.append(
                     UpBlock(
                         in_channels=in_channels,
@@ -281,6 +283,7 @@ class UNet(nn.Module):
                 )
             in_channels = channels[idx]
             out_channels = channels[idx - 1]
+            # print("Res", in_channels, out_channels)
             self.up_blocks.append(
                 UpBlock(
                     in_channels=in_channels,
@@ -293,6 +296,7 @@ class UNet(nn.Module):
             in_channels = out_channels
 
             if idx > 1:
+                # print("Up", out_channels)
                 self.up_blocks.append(Upsample(out_channels))
 
         self.fin_block = nn.Sequential(
@@ -323,13 +327,26 @@ class UNet(nn.Module):
             if isinstance(layer, Upsample):
                 x = layer(x)
             else:
-                x = layer(torch.cat([x, xs.pop()], dim=1), t)
+                x = torch.cat([x, xs.pop()], dim=1)
+                x = layer(x, t)
             # print(x.shape)
         assert len(xs) == 0
 
         x = self.fin_block(x)
         # print(x.shape)
         return x
+# new = UNet(
+#     n_diffusion_steps=1000,
+#     init_channels=128,
+#     channels=(128, 256, 256, 256),
+#     attns=(True, True, True, True),
+#     n_blocks=2,
+# )
+# # print_n_params(new.mid_block)
+# # print_n_params(new)
+# x = torch.randn(1, 3, 32, 32)
+# t = torch.randint(0, 1000, (1,))
+# new(x, t)
 
 
 class DDPM(nn.Module):
@@ -372,15 +389,13 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        # self.net = UNet(
-        #     n_diffusion_steps=n_diffusion_steps,
-        #     init_channels=init_channels,
-        #     channels=channels,
-        #     attns=attns,
-        #     n_blocks=n_blocks,
-        # ).to(device)
-        self.net = OldUNet().to(device)
-        # self.net = labmlUNet().to(device)
+        self.net = UNet(
+            n_diffusion_steps=n_diffusion_steps,
+            init_channels=init_channels,
+            channels=channels,
+            attns=attns,
+            n_blocks=n_blocks,
+        ).to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -431,16 +446,7 @@ class DDPM(nn.Module):
             ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        # recon_image = self.reconstruct(
-        #     noisy_image=noisy_image, noise=pred_noise.detach(), diffusion_step=diffusion_step,
-        # )
-        # image_to_grid(recon_image, n_cols=int(recon_image.size(0) ** 0.5)).show()
         return F.mse_loss(pred_noise, random_noise, reduction="mean")
-
-    @torch.inference_mode()
-    def reconstruct(self, noisy_image, noise, diffusion_step):
-        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)
 
     @torch.inference_mode()
     def take_denoising_step(self, noisy_image, cur_diffusion_step):
@@ -458,14 +464,12 @@ class DDPM(nn.Module):
         mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - ((beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise)
         )
-        # mean = (1 / (alpha_t ** 0.5)) * (noisy_image - (1 - alpha_t) / ((1 - alpha_bar_t) ** 0.5) * pred_noise)
         if cur_diffusion_step > 0:
             var = beta_t
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
             denoised_image = mean + (var ** 0.5) * random_noise
         else:
             denoised_image = mean
-        # denoised_image.clamp_(-1, 1)
         return denoised_image
 
     @torch.inference_mode()
@@ -484,3 +488,8 @@ class DDPM(nn.Module):
         return self.perform_denoising_process(
             noisy_image=random_noise, cur_diffusion_step=self.n_diffusion_steps - 1,
         )
+
+    @torch.inference_mode()
+    def reconstruct(self, noisy_image, noise, diffusion_step):
+        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
+        return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)

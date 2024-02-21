@@ -92,7 +92,7 @@ def modify_state_dict(state_dict, pattern=r"^module.|^_orig_mod."):
     return new_state_dict
 
 
-def print_n_prams(model):
+def print_n_params(model):
     n_params = 0
     n_trainable_params = 0
     for p in model.parameters():

@@ -11,7 +11,7 @@ import math
 from tqdm import tqdm
 from pathlib import Path
 
-from utils import image_to_grid
+from utils import image_to_grid, print_n_params
 
 
 class Swish(nn.Module):
@@ -19,30 +19,6 @@ class Swish(nn.Module):
         return x * torch.sigmoid(x)
 
 
-# class TimeEmbedding(nn.Module):
-#     def __init__(self, n_diffusion_steps, d_model, dim):
-#         assert d_model % 2 == 0
-#         super().__init__()
-
-#         emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000)
-#         emb = torch.exp(-emb)
-#         pos = torch.arange(n_diffusion_steps).float()
-#         emb = pos[:, None] * emb[None, :]
-#         assert list(emb.shape) == [n_diffusion_steps, d_model // 2]
-#         emb = torch.stack([torch.sin(emb), torch.cos(emb)], dim=-1)
-#         assert list(emb.shape) == [n_diffusion_steps, d_model // 2, 2]
-#         emb = emb.view(n_diffusion_steps, d_model)
-
-#         self.timembedding = nn.Sequential(
-#             nn.Embedding.from_pretrained(emb),
-#             nn.Linear(d_model, dim),
-#             Swish(),
-#             nn.Linear(dim, dim),
-#         )
-
-#     def forward(self, t):
-#         emb = self.timembedding(t)
-#         return emb
 class TimeEmbedding(nn.Module):
     # "Parameters are shared across time, which is specified to the network using the Transformer
     # sinusoidal position embedding."
@@ -71,24 +47,6 @@ class TimeEmbedding(nn.Module):
         x = torch.index_select(
             self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step,
         )
-        return self.layers(x)
-
-
-class Downsample(nn.Conv2d):
-    def __init__(self, channels):
-        super().__init__(channels, channels, 3, 2, 1)
-
-
-class Upsample(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-
-        self.layers = nn.Sequential(
-            nn.Upsample(scale_factor=2, mode="nearest"),
-            nn.Conv2d(channels, channels, 3, 1, 1),
-        )
-
-    def forward(self, x):
         return self.layers(x)
 
 
@@ -181,6 +139,24 @@ class ResBlock(nn.Module):
         return h
 
 
+class Downsample(nn.Conv2d):
+    def __init__(self, channels):
+        super().__init__(channels, channels, 3, 2, 1)
+
+
+class Upsample(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+
+        self.layers = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="nearest"),
+            nn.Conv2d(channels, channels, 3, 1, 1),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
 class OldUNet(nn.Module):
     def __init__(self, n_diffusion_steps=1000, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1):
         super().__init__()
@@ -189,7 +165,6 @@ class OldUNet(nn.Module):
 
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(
-            # n_diffusion_steps=n_diffusion_steps, d_model=ch, dim=tdim,
             n_diffusion_steps=n_diffusion_steps, time_channels=tdim,
         )
 
@@ -200,6 +175,7 @@ class OldUNet(nn.Module):
         for i, mult in enumerate(ch_mult):
             out_ch = ch * mult
             for _ in range(num_res_blocks):
+                print("Res", cur_ch, out_ch)
                 self.downblocks.append(
                     ResBlock(
                         in_ch=cur_ch,
@@ -212,6 +188,7 @@ class OldUNet(nn.Module):
                 cur_ch = out_ch
                 cxs.append(cur_ch)
             if i != len(ch_mult) - 1:
+                print("Down", cur_ch)
                 self.downblocks.append(Downsample(cur_ch))
                 cxs.append(cur_ch)
 
@@ -219,25 +196,31 @@ class OldUNet(nn.Module):
             ResBlock(cur_ch, cur_ch, tdim, dropout, attn=True),
             ResBlock(cur_ch, cur_ch, tdim, dropout, attn=False),
         ])
+        print("Mid")
 
         self.upblocks = nn.ModuleList()
         for i, mult in reversed(list(enumerate(ch_mult))):
             out_ch = ch * mult
             for _ in range(num_res_blocks + 1):
+                tt = cxs.pop() + cur_ch
+                print("Res", tt, out_ch)
                 self.upblocks.append(
-                ResBlock(
-                    in_ch=cxs.pop() + cur_ch,
-                    out_ch=out_ch,
-                    tdim=tdim,
-                    dropout=dropout,
-                    attn=(i in attn))
+                    ResBlock(
+                        # in_ch=cxs.pop() + cur_ch,
+                        in_ch=tt,
+                        out_ch=out_ch,
+                        tdim=tdim,
+                        dropout=dropout,
+                        attn=(i in attn)
+                    )
                 )
                 cur_ch = out_ch
             if i != 0:
+                print("Up", cur_ch)
                 self.upblocks.append(Upsample(cur_ch))
         assert len(cxs) == 0
 
-        self.tail = nn.Sequential(
+        self.fin_block = nn.Sequential(
             nn.GroupNorm(32, cur_ch),
             Swish(),
             nn.Conv2d(cur_ch, 3, kernel_size=3, stride=1, padding=1)
@@ -252,22 +235,30 @@ class OldUNet(nn.Module):
                 x = layer(x)
             else:
                 x = layer(x, temb)
+            # print(x.shape)
             xs.append(x)
 
         for layer in self.middleblocks:
             x = layer(x, temb)
+            # print(x.shape)
 
         for layer in self.upblocks:
-            if isinstance(layer, ResBlock):
-                x = torch.cat([x, xs.pop()], dim=1)
-
             if isinstance(layer, Upsample):
                 x = layer(x)
             else:
+                x = torch.cat([x, xs.pop()], dim=1)
                 x = layer(x, temb)
-        x = self.tail(x)
+                # print(x.shape)
+        x = self.fin_block(x)
+        # print(x.shape)
         assert len(xs) == 0
         return x
+old = OldUNet()
+
+# print_n_params(old.middleblocks)
+x = torch.randn(1, 3, 32, 32)
+t = torch.randint(0, 1000, (1,))
+old(x, t)
 
 
 class DDPM(nn.Module):

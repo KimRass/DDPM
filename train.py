@@ -19,13 +19,13 @@ from utils import (
     get_grad_scaler,
     get_elapsed_time,
     modify_state_dict,
-    print_n_prams,
+    print_n_params,
     image_to_grid,
     save_image,
 )
 from data import get_dls
-# from model2 import DDPM
-from old_model import DDPM
+from model import DDPM
+# from old_model import DDPM
 
 torch.set_printoptions(linewidth=70)
 
@@ -217,7 +217,7 @@ def main():
         n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )
-    print_n_prams(model)
+    print_n_params(model)
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
 
