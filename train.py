@@ -2,15 +2,14 @@
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 
 import torch
-import torch.nn.utils as torch_utils
-import torch.nn.functional as F
-from torch.optim import AdamW
+from transformers import AdamW
 import gc
 import argparse
 from pathlib import Path
 import math
 from time import time
 from tqdm import tqdm
+from timm.scheduler import CosineLRScheduler
 
 from utils import (
     set_seed,
@@ -23,8 +22,8 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-# from model import DDPM
-from old_model import DDPM
+from model import DDPM
+# from old_model import DDPM
 
 torch.set_printoptions(linewidth=70)
 
@@ -39,10 +38,14 @@ def get_args():
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=True)
-    parser.add_argument("--channels", type=int, required=True)
-    parser.add_argument("--channel_mults", type=str, required=True)
+    # parser.add_argument("--channels", type=int, required=True)
+    # parser.add_argument("--channel_mults", type=str, required=True)
+    # parser.add_argument("--attns", type=str, required=True)
+    # parser.add_argument("--n_res_blocks", type=int, default=2, required=False)
+    parser.add_argument("--init_channels", type=int, required=True)
+    parser.add_argument("--channels", type=str, required=True)
     parser.add_argument("--attns", type=str, required=True)
-    parser.add_argument("--n_res_blocks", type=int, default=2, required=False)
+    parser.add_argument("--n_blocks", type=int, default=2, required=False)
 
     parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--seed", type=int, default=223, required=False)
@@ -67,10 +70,10 @@ class Trainer(object):
 
         self.ckpt_path = self.save_dir/"ckpt.pth"
 
-    def train_for_one_epoch(self, model, optim, scaler):
+    def train_for_one_epoch(self, epoch, model, optim, scaler):
         train_loss = 0
-        pbar = tqdm(self.train_dl, leave=False)
-        for ori_image in pbar: # "$x_{0} \sim q(x_{0})$"
+        pbar = enumerate(tqdm(self.train_dl, leave=False))
+        for step_idx, ori_image in pbar: # "$x_{0} \sim q(x_{0})$"
             pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
@@ -85,6 +88,8 @@ class Trainer(object):
             else:
                 loss.backward()
                 optim.step()
+
+            self.scheduler.step((epoch - 1) * len(self.train_dl) + step_idx)
         return train_loss
 
     @torch.inference_mode()
@@ -123,14 +128,28 @@ class Trainer(object):
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
 
-    def train(self, n_epochs, model, optim, scaler):
+    def train(self, n_epochs, model, optim, scaler, n_warmup_steps):
+        for param in model.parameters():
+            param.register_hook(lambda grad: torch.clip(grad, -1, 1))
+
         model = torch.compile(model)
+
+        self.scheduler = CosineLRScheduler(
+            optimizer=optim,
+            t_initial=n_epochs * len(self.train_dl),
+            warmup_t=n_warmup_steps,
+            warmup_lr_init=optim.lr * 0.1,
+            warmup_prefix=True,
+            t_in_epochs=False,
+        )
 
         init_epoch = 0
         min_val_loss = math.inf
         for epoch in range(init_epoch + 1, n_epochs + 1):
             start_time = time()
-            train_loss = self.train_for_one_epoch(model=model, optim=optim, scaler=scaler)
+            train_loss = self.train_for_one_epoch(
+                epoch=epoch, model=model, optim=optim, scaler=scaler,
+            )
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
@@ -180,23 +199,20 @@ def main():
         device=DEVICE,
     )
 
-    # model = DDPM(
-    #     img_size=args.IMG_SIZE,
-    #     init_channels=128,
-    #     channels=(128, 256, 256, 256),
-    #     attns=(False, False, True, False),
-    #     # init_channels=128,
-    #     # channels=(128, 256, 256, 512),
-    #     # attns=(False, False, False, True),
-    #     n_blocks=args.N_BLOCKS,
-    #     device=DEVICE,
-    # )
     model = DDPM(
         img_size=args.IMG_SIZE,
         channels=args.CHANNELS,
         channel_mults=eval(args.CHANNEL_MULTS),
-        attns=eval(args.ATTRNS),
+        attns=eval(args.ATTNS),
         n_res_blocks=args.N_RES_BLOCKS,
+        device=DEVICE,
+    )
+    model = DDPM(
+        img_size=args.IMG_SIZE,
+        init_channels=args.INIT_CHANNELS,
+        channels=eval(args.CHANNELS),
+        attns=eval(args.ATTNS),
+        n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )
     print_n_params(model)

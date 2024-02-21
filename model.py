@@ -15,7 +15,7 @@ from tqdm import tqdm
 from pathlib import Path
 import contextlib
 
-from utils import image_to_grid, save_image
+from utils import print_n_params, image_to_grid, save_image
 
 
 class Swish(nn.Module):
@@ -154,12 +154,12 @@ class UNet(nn.Module):
         # 4 8 16 32: 4
         # 8 16 32 64: 4
         # 8 16 32 64 128 256: 6
-        init_channels=32,
-        channels=(64, 128, 256, 512),
+        init_channels,
+        channels,
         # "All models have self-attention blocks at the 16 × 16 resolution
         # between the convolutional blocks."
         # "We use self-attention at the 16 × 16 feature map resolution."
-        attns=(False, False, True, False),
+        attns,
         # "All models have two convolutional residual blocks per resolution level."
         n_blocks=2,
         n_groups=32,
@@ -312,7 +312,7 @@ class DDPM(nn.Module):
         attns,
         device,
         n_blocks,
-        n_channels=3,
+        image_channels=3,
         n_diffusion_steps=1000,
         init_beta=0.0001,
         fin_beta=0.02,
@@ -321,7 +321,7 @@ class DDPM(nn.Module):
 
         self.img_size = img_size
         self.device = device
-        self.n_channels = n_channels
+        self.image_channels = image_channels
         self.n_diffusion_steps = n_diffusion_steps
         self.init_beta = init_beta
         self.fin_beta = fin_beta
@@ -345,7 +345,7 @@ class DDPM(nn.Module):
 
     def sample_noise(self, batch_size):
         return torch.randn(
-            size=(batch_size, self.n_channels, self.img_size, self.img_size),
+            size=(batch_size, self.image_channels, self.img_size, self.img_size),
             device=self.device,
         )
 
@@ -353,9 +353,6 @@ class DDPM(nn.Module):
         return torch.randint(
             0, self.n_diffusion_steps, size=(batch_size,), device=self.device,
         )
-        # return torch.randint(
-        #     0, self.n_diffusion_steps, size=(1,), device=self.device,
-        # ).repeat(batch_size)
 
     def batchify_diffusion_steps(self, diffusion_step_idx, batch_size):
         return torch.full(
@@ -363,7 +360,7 @@ class DDPM(nn.Module):
             fill_value=diffusion_step_idx,
             dtype=torch.long,
             device=self.device,
-        )  
+        )
 
     def perform_diffusion_process(self, ori_image, diffusion_step, random_noise=None):
         # "$\bar{\alpha_{t}}$"
@@ -505,3 +502,32 @@ if __name__ == "__main__":
     x = torch.randn(1, 3, 32, 32)
     t = torch.randint(0, 1000, (1,))
     new(x, t)
+
+    from diffusers import UNet2DModel
+
+
+    model = UNet2DModel(
+        sample_size=64,  # the target image resolution
+        in_channels=3,  # the number of input channels, 3 for RGB images
+        out_channels=3,  # the number of output channels
+        layers_per_block=2,  # how many ResNet layers to use per UNet block
+        block_out_channels=(128, 128, 256, 256, 512, 512),  # the number of output channes for each UNet block
+        down_block_types=( 
+            "DownBlock2D",  # a regular ResNet downsampling block
+            "DownBlock2D", 
+            "DownBlock2D", 
+            "DownBlock2D", 
+            "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
+            "DownBlock2D",
+        ), 
+        up_block_types=(
+            "UpBlock2D",  # a regular ResNet upsampling block
+            "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
+            "UpBlock2D", 
+            "UpBlock2D", 
+            "UpBlock2D", 
+            "UpBlock2D"  
+        ),
+    )
+    model
+    print_n_params(model)
