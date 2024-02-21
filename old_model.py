@@ -189,7 +189,8 @@ class OldUNet(nn.Module):
 
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(
-            n_diffusion_steps=n_diffusion_steps, d_model=ch, dim=tdim,
+            # n_diffusion_steps=n_diffusion_steps, d_model=ch, dim=tdim,
+            n_diffusion_steps=n_diffusion_steps, time_channels=tdim,
         )
 
         self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
