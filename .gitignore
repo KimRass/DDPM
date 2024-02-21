@@ -8,4 +8,3 @@ lib64
 pyvenv.cfg
 share/
 wandb/
-_temp.py

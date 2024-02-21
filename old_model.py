@@ -103,29 +103,29 @@ class ResConvSelfAttnBlock(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
+    def __init__(self, in_channels, out_channels, tdim, dropout, attn=False):
         super().__init__()
         self.block1 = nn.Sequential(
-            nn.GroupNorm(32, in_ch),
+            nn.GroupNorm(32, in_channels),
             Swish(),
-            nn.Conv2d(in_ch, out_ch, 3, stride=1, padding=1),
+            nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1),
         )
         self.temb_proj = nn.Sequential(
             Swish(),
-            nn.Linear(tdim, out_ch),
+            nn.Linear(tdim, out_channels),
         )
         self.block2 = nn.Sequential(
-            nn.GroupNorm(32, out_ch),
+            nn.GroupNorm(32, out_channels),
             Swish(),
             nn.Dropout(dropout),
-            nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1),
+            nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=1),
         )
-        if in_ch != out_ch:
-            self.shortcut = nn.Conv2d(in_ch, out_ch, 1, stride=1, padding=0)
+        if in_channels != out_channels:
+            self.shortcut = nn.Conv2d(in_channels, out_channels, 1, stride=1, padding=0)
         else:
             self.shortcut = nn.Identity()
         if attn:
-            self.attn = ResConvSelfAttnBlock(out_ch)
+            self.attn = ResConvSelfAttnBlock(out_channels)
         else:
             self.attn = nn.Identity()
 

@@ -16,8 +16,6 @@ from pathlib import Path
 import contextlib
 
 from utils import image_to_grid, save_image
-from model_labml import labmlUNet
-from old_model import OldUNet
 
 
 class Swish(nn.Module):
