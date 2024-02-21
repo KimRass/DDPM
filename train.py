@@ -139,7 +139,7 @@ class Trainer(object):
             optimizer=optim,
             t_initial=n_epochs * len(self.train_dl),
             warmup_t=n_warmup_steps,
-            warmup_lr_init=optim.lr * 0.1,
+            warmup_lr_init=optim.param_groups[0]["lr"] * 0.1,
             warmup_prefix=True,
             t_in_epochs=False,
         )
