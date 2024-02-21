@@ -72,17 +72,7 @@ class Trainer(object):
             pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
-            # diffusion_step = model.sample_diffusion_step(batch_size=ori_image.size(0))
-            # random_noise = model.sample_noise(batch_size=ori_image.size(0))
-            with torch.autocast(
-                device_type=self.device.type, dtype=torch.float16,
-            ) if self.device.type == "cuda" else contextlib.nullcontext():
-                # noisy_image = model(
-                #     ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
-                # )
-                # pred_noise = model.predict_noise(noisy_image=noisy_image, diffusion_step=diffusion_step)
-                # loss =  F.mse_loss(pred_noise, random_noise, reduction="mean")
-                loss = model.get_loss(ori_image)
+            loss = model.get_loss(ori_image)
             cum_train_loss += loss.item()
 
             optim.zero_grad()
@@ -121,7 +111,7 @@ class Trainer(object):
             pbar.set_description("Validating...")
 
             ori_image = ori_image.to(self.device)
-            loss = model.get_loss(ori_image)
+            loss = model.get_loss(ori_image.detach())
             cum_val_loss += loss.item()
         val_loss = cum_val_loss / len(self.val_dl)
         return val_loss

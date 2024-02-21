@@ -13,6 +13,7 @@ import imageio
 import math
 from tqdm import tqdm
 from pathlib import Path
+import contextlib
 
 from utils import image_to_grid, save_image
 from model_labml import labmlUNet
@@ -444,8 +445,11 @@ class DDPM(nn.Module):
         noisy_image = self.perform_diffusion_process(
             ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
         )
-        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-        return F.mse_loss(pred_noise, random_noise, reduction="mean")
+        with torch.autocast(
+            device_type=self.device.type, dtype=torch.float16,
+        ) if self.device.type == "cuda" else contextlib.nullcontext():
+            pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
+            return F.mse_loss(pred_noise, random_noise, reduction="mean")
 
     @torch.inference_mode()
     def take_denoising_step(self, noisy_image, cur_diffusion_step):
