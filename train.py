@@ -23,8 +23,8 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-from model import DDPM
-# from old_model import DDPM
+# from model import DDPM
+from old_model import DDPM
 
 torch.set_printoptions(linewidth=70)
 
@@ -177,14 +177,22 @@ def main():
         device=DEVICE,
     )
 
+    # model = DDPM(
+    #     img_size=args.IMG_SIZE,
+    #     init_channels=128,
+    #     channels=(128, 256, 256, 256),
+    #     attns=(False, False, True, False),
+    #     # init_channels=128,
+    #     # channels=(128, 256, 256, 512),
+    #     # attns=(False, False, False, True),
+    #     n_blocks=args.N_BLOCKS,
+    #     device=DEVICE,
+    # )
     model = DDPM(
         img_size=args.IMG_SIZE,
-        init_channels=128,
-        channels=(128, 256, 256, 256),
-        attns=(False, False, True, False),
-        # init_channels=128,
-        # channels=(128, 256, 256, 512),
-        # attns=(False, False, False, True),
+        channels=128,
+        channel_mults=(1, 2, 2, 2),
+        attns=(False, True, False, False),
         n_blocks=args.N_BLOCKS,
         device=DEVICE,
     )

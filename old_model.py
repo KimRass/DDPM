@@ -142,8 +142,8 @@ class OldUNet(nn.Module):
         self,
         channels=128,
         channel_mults=(1, 2, 2, 2),
-        attns=(False, True, False, False),
         # "All models have two convolutional residual blocks per resolution level."
+        attns=(False, True, False, False),
         n_res_blocks=2,
         drop_prob=0.1,
         n_groups=32,
@@ -243,12 +243,6 @@ class OldUNet(nn.Module):
         # print(x.shape)
         assert len(xs) == 0
         return x
-old = OldUNet()
-print_n_params(old)
-
-x = torch.randn(1, 3, 32, 32)
-t = torch.randint(0, 1000, (1,))
-old(x, t)
 
 
 class DDPM(nn.Module):
@@ -267,12 +261,12 @@ class DDPM(nn.Module):
     def __init__(
         self,
         img_size,
-        init_channels,
         channels,
+        channel_mults,
         attns,
+        n_res_blocks,
         device,
-        n_blocks,
-        n_channels=3,
+        img_channels=3,
         n_diffusion_steps=1000,
         init_beta=0.0001,
         fin_beta=0.02,
@@ -281,7 +275,7 @@ class DDPM(nn.Module):
 
         self.img_size = img_size
         self.device = device
-        self.n_channels = n_channels
+        self.img_channels = img_channels
         self.n_diffusion_steps = n_diffusion_steps
         self.init_beta = init_beta
         self.fin_beta = fin_beta
@@ -291,15 +285,13 @@ class DDPM(nn.Module):
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        # self.net = UNet(
-        #     n_diffusion_steps=n_diffusion_steps,
-        #     init_channels=init_channels,
-        #     channels=channels,
-        #     attns=attns,
-        #     n_blocks=n_blocks,
-        # ).to(device)
-        self.net = OldUNet().to(device)
-        # self.net = labmlUNet().to(device)
+        self.net = OldUNet(
+            channels=channels,
+            channel_mults=channel_mults,
+            attns=attns,
+            # "All models have two convolutional residual blocks per resolution level."
+            n_res_blocks=n_res_blocks,
+        ).to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -307,7 +299,7 @@ class DDPM(nn.Module):
 
     def sample_noise(self, batch_size):
         return torch.randn(
-            size=(batch_size, self.n_channels, self.img_size, self.img_size),
+            size=(batch_size, self.img_channels, self.img_size, self.img_size),
             device=self.device,
         )
 
@@ -403,3 +395,12 @@ class DDPM(nn.Module):
         return self.perform_denoising_process(
             noisy_image=random_noise, cur_diffusion_step=self.n_diffusion_steps - 1,
         )
+
+
+if __name__ == "__main__":
+    old = OldUNet()
+    print_n_params(old)
+
+    x = torch.randn(1, 3, 32, 32)
+    t = torch.randint(0, 1000, (1,))
+    old(x, t)
