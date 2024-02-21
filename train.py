@@ -22,7 +22,7 @@ from utils import (
     image_to_grid,
     save_image,
 )
-from data import get_dls
+from data import get_train_and_val_dls
 from model import DDPM
 # from old_model import DDPM
 
@@ -163,7 +163,7 @@ def main():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.synchronize()
 
-    train_dl, val_dl, _ = get_dls(
+    train_dl, val_dl = get_train_and_val_dls(
         data_dir=args.DATA_DIR,
         img_size=args.IMG_SIZE,
         batch_size=args.BATCH_SIZE,
