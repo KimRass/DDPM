@@ -19,40 +19,61 @@ class Swish(nn.Module):
         return x * torch.sigmoid(x)
 
 
+# class TimeEmbedding(nn.Module):
+#     def __init__(self, n_diffusion_steps, d_model, dim):
+#         assert d_model % 2 == 0
+#         super().__init__()
+
+#         emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000)
+#         emb = torch.exp(-emb)
+#         pos = torch.arange(n_diffusion_steps).float()
+#         emb = pos[:, None] * emb[None, :]
+#         assert list(emb.shape) == [n_diffusion_steps, d_model // 2]
+#         emb = torch.stack([torch.sin(emb), torch.cos(emb)], dim=-1)
+#         assert list(emb.shape) == [n_diffusion_steps, d_model // 2, 2]
+#         emb = emb.view(n_diffusion_steps, d_model)
+
+#         self.timembedding = nn.Sequential(
+#             nn.Embedding.from_pretrained(emb),
+#             nn.Linear(d_model, dim),
+#             Swish(),
+#             nn.Linear(dim, dim),
+#         )
+
+#     def forward(self, t):
+#         emb = self.timembedding(t)
+#         return emb
 class TimeEmbedding(nn.Module):
-    def __init__(self, n_diffusion_steps, d_model, dim):
-        assert d_model % 2 == 0
+    # "Parameters are shared across time, which is specified to the network using the Transformer
+    # sinusoidal position embedding."
+    def __init__(self, n_diffusion_steps, time_channels):
         super().__init__()
 
-        emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000)
-        emb = torch.exp(-emb)
-        pos = torch.arange(n_diffusion_steps).float()
-        emb = pos[:, None] * emb[None, :]
-        assert list(emb.shape) == [n_diffusion_steps, d_model // 2]
-        emb = torch.stack([torch.sin(emb), torch.cos(emb)], dim=-1)
-        assert list(emb.shape) == [n_diffusion_steps, d_model // 2, 2]
-        emb = emb.view(n_diffusion_steps, d_model)
+        self.d_model = time_channels // 4
 
-        self.timembedding = nn.Sequential(
-            nn.Embedding.from_pretrained(emb),
-            nn.Linear(d_model, dim),
+        pos = torch.arange(n_diffusion_steps).unsqueeze(1)
+        i = torch.arange(self.d_model // 2).unsqueeze(0)
+        angle = pos / (10_000 ** (2 * i / self.d_model))
+
+        self.pe_mat = torch.zeros(size=(n_diffusion_steps, self.d_model))
+        self.pe_mat[:, 0:: 2] = torch.sin(angle)
+        self.pe_mat[:, 1:: 2] = torch.cos(angle)
+
+        self.register_buffer("pos_enc_mat", self.pe_mat)
+
+        self.layers = nn.Sequential(
+            nn.Linear(self.d_model, time_channels),
             Swish(),
-            nn.Linear(dim, dim),
+            nn.Linear(time_channels, time_channels),
         )
 
-    def forward(self, t):
-        emb = self.timembedding(t)
-        return emb
+    def forward(self, diffusion_step):
+        x = torch.index_select(
+            self.pe_mat.to(diffusion_step.device), dim=0, index=diffusion_step,
+        )
+        return self.layers(x)
 
 
-# class Downsample(nn.Module):
-#     def __init__(self, in_ch):
-#         super().__init__()
-#         self.main = nn.Conv2d(in_ch, in_ch, 3, stride=2, padding=1)
-
-#     def forward(self, x, temb):
-#         x = self.main(x)
-#         return x
 class Downsample(nn.Conv2d):
     def __init__(self, channels):
         super().__init__(channels, channels, 3, 2, 1)
@@ -90,12 +111,10 @@ class Upsample(nn.Module):
 #         q = q.permute(0, 2, 3, 1).view(B, H * W, C)
 #         k = k.view(B, C, H * W)
 #         w = torch.bmm(q, k) * (int(C) ** (-0.5))
-#         assert list(w.shape) == [B, H * W, H * W]
 #         w = F.softmax(w, dim=-1)
 
 #         v = v.permute(0, 2, 3, 1).view(B, H * W, C)
 #         h = torch.bmm(w, v)
-#         assert list(h.shape) == [B, H * W, C]
 #         h = h.view(B, H, W, C).permute(0, 3, 1, 2)
 #         h = self.proj(h)
 #         return x + h

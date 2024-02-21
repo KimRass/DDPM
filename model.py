@@ -24,7 +24,7 @@ class Swish(nn.Module):
         return x * torch.sigmoid(x)
 
 
-class TimeEmbedder(nn.Module):
+class TimeEmbedding(nn.Module):
     # "Parameters are shared across time, which is specified to the network using the Transformer
     # sinusoidal position embedding."
     def __init__(self, n_diffusion_steps, time_channels):
@@ -234,7 +234,7 @@ class UNet(nn.Module):
         self.init_conv = nn.Conv2d(3, init_channels, 3, 1, 1)
 
         self.time_channels = init_channels * 4
-        self.time_embed = TimeEmbedder(
+        self.time_embed = TimeEmbedding(
             n_diffusion_steps=n_diffusion_steps, time_channels=self.time_channels,
         )
 
