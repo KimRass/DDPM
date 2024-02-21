@@ -6,9 +6,11 @@ source set_pythonpath.sh
 python3 ../train.py\
     --data_dir="/Users/jongbeomkim/Documents/datasets/"\
     --save_dir="/Users/jongbeomkim/Documents/ddpm"\
-    --img_size=128\
     --n_epochs=50\
-    --batch_size=16\
+    --batch_size=8\
     --lr=0.0003\
     --n_cpus=2\
-    --n_blocks=2\
+    --img_size=64\
+    --channels=128\
+    --channel_mults="(1, 2, 2, 2)"\
+    --n_res_blocks=2\

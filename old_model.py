@@ -160,7 +160,7 @@ class OldUNet(nn.Module):
 
         self.init_conv = nn.Conv2d(3, channels, 3, 1, 1)
         self.downblocks = nn.ModuleList()
-        cxs = [channels]  # record output channel when dowmsample for upsample
+        channels_ls = [channels]
         cur_channels = channels
         for i, mult in enumerate(channel_mults):
             out_channels = channels * mult
@@ -176,11 +176,11 @@ class OldUNet(nn.Module):
                     )
                 )
                 cur_channels = out_channels
-                cxs.append(cur_channels)
+                channels_ls.append(cur_channels)
             if i != len(channel_mults) - 1:
                 # print("Down", cur_channels)
                 self.downblocks.append(Downsample(cur_channels))
-                cxs.append(cur_channels)
+                channels_ls.append(cur_channels)
 
         self.middleblocks = nn.ModuleList([
             ResBlock(cur_channels, cur_channels, time_channels, drop_prob, attn=True),
@@ -192,11 +192,11 @@ class OldUNet(nn.Module):
         for i, mult in reversed(list(enumerate(channel_mults))):
             out_channels = channels * mult
             for _ in range(n_res_blocks + 1):
-                tt = cxs.pop() + cur_channels
+                # tt = channels_ls.pop() + cur_channels
                 # print("Res", tt, out_channels)
                 self.up_blocks.append(
                     ResBlock(
-                        in_channels=cxs.pop() + cur_channels,
+                        in_channels=channels_ls.pop() + cur_channels,
                         # in_channels=tt,
                         out_channels=out_channels,
                         time_channels=time_channels,
@@ -208,7 +208,7 @@ class OldUNet(nn.Module):
             if i != 0:
                 # print("Up", cur_channels)
                 self.up_blocks.append(Upsample(cur_channels))
-        assert len(cxs) == 0
+        assert len(channels_ls) == 0
 
         self.fin_block = nn.Sequential(
             nn.GroupNorm(n_groups, cur_channels),

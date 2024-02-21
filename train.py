@@ -34,12 +34,14 @@ def get_args():
 
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
-    parser.add_argument("--img_size", type=int, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=True)
-    parser.add_argument("--n_blocks", type=int, default=2, required=False)
+    parser.add_argument("--img_size", type=int, required=True)
+    parser.add_argument("--channels", type=int, required=True)
+    parser.add_argument("--channel_mults", type=str, required=True)
+    parser.add_argument("--n_res_blocks", type=int, default=2, required=False)
 
     parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--seed", type=int, default=223, required=False)
@@ -190,10 +192,10 @@ def main():
     # )
     model = DDPM(
         img_size=args.IMG_SIZE,
-        channels=128,
-        channel_mults=(1, 2, 2, 2),
+        channels=args.CHANNELS,
+        channel_mults=eval(args.CHANNEL_MULTS),
         attns=(False, True, False, False),
-        n_blocks=args.N_BLOCKS,
+        n_res_blocks=args.N_RES_BLOCKS,
         device=DEVICE,
     )
     print_n_params(model)
