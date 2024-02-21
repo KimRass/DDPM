@@ -158,14 +158,14 @@ class OldUNet(nn.Module):
             n_diffusion_steps=n_diffusion_steps, time_channels=time_channels,
         )
 
-        self.head = nn.Conv2d(3, channels, 3, 1, 1)
+        self.init_conv = nn.Conv2d(3, channels, 3, 1, 1)
         self.downblocks = nn.ModuleList()
         cxs = [channels]  # record output channel when dowmsample for upsample
         cur_channels = channels
         for i, mult in enumerate(channel_mults):
             out_channels = channels * mult
             for _ in range(n_res_blocks):
-                print("Res", cur_channels, out_channels)
+                # print("Res", cur_channels, out_channels)
                 self.downblocks.append(
                     ResBlock(
                         in_channels=cur_channels,
@@ -178,7 +178,7 @@ class OldUNet(nn.Module):
                 cur_channels = out_channels
                 cxs.append(cur_channels)
             if i != len(channel_mults) - 1:
-                print("Down", cur_channels)
+                # print("Down", cur_channels)
                 self.downblocks.append(Downsample(cur_channels))
                 cxs.append(cur_channels)
 
@@ -186,18 +186,18 @@ class OldUNet(nn.Module):
             ResBlock(cur_channels, cur_channels, time_channels, drop_prob, attn=True),
             ResBlock(cur_channels, cur_channels, time_channels, drop_prob, attn=False),
         ])
-        print("Mid")
+        # print("Mid")
 
         self.up_blocks = nn.ModuleList()
         for i, mult in reversed(list(enumerate(channel_mults))):
             out_channels = channels * mult
             for _ in range(n_res_blocks + 1):
                 tt = cxs.pop() + cur_channels
-                print("Res", tt, out_channels)
+                # print("Res", tt, out_channels)
                 self.up_blocks.append(
                     ResBlock(
-                        # in_channels=cxs.pop() + cur_channels,
-                        in_channels=tt,
+                        in_channels=cxs.pop() + cur_channels,
+                        # in_channels=tt,
                         out_channels=out_channels,
                         time_channels=time_channels,
                         drop_prob=drop_prob,
@@ -206,7 +206,7 @@ class OldUNet(nn.Module):
                 )
                 cur_channels = out_channels
             if i != 0:
-                print("Up", cur_channels)
+                # print("Up", cur_channels)
                 self.up_blocks.append(Upsample(cur_channels))
         assert len(cxs) == 0
 
@@ -218,7 +218,7 @@ class OldUNet(nn.Module):
 
     def forward(self, noisy_image, diffusion_step):
         temb = self.time_embedding(diffusion_step)
-        x = self.head(noisy_image)
+        x = self.init_conv(noisy_image)
         xs = [x]
         for layer in self.downblocks:
             if isinstance(layer, Downsample):

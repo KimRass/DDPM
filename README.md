@@ -76,7 +76,7 @@ python3 evaluate.py
 # 4. Theorectical Background
 ## 1) Forward (diffusion) process
 - Timestep이 매우 커질 때 이미지가 Normal gaussian distribution을 따르는 이유는?
-    - $\prod_{s=1}^{t}{\alpha_{s}}$
+    $$\prod_{s=1}^{t}{\alpha_{s}}$$
     - 1보다 작은 많은 수들을 서로 곱할 경우 0에 수렴합니다.
 <!-- - Forward (diffusion) process
     - We define the forward diffusion process which adds Gaussian noise at each time step $t$, according to a known variance schedule $0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$ as
