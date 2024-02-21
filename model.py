@@ -245,7 +245,7 @@ class UNet(nn.Module):
             out_channels = channels[idx + 1]
             attn=attns[idx]
             for _ in range(n_blocks):
-                print("Res", in_channels, out_channels)
+                # print("Res", in_channels, out_channels)
                 self.down_blocks.append(
                     DownBlock(
                         in_channels=in_channels,
@@ -258,20 +258,20 @@ class UNet(nn.Module):
                 in_channels = out_channels
 
             if idx < len(channels) - 2:
-                print("Down", out_channels)
+                # print("Down", out_channels)
                 self.down_blocks.append(Downsample(out_channels))
 
         self.mid_block = MidBlock(
             channels=out_channels, time_channels=self.time_channels, n_groups=n_groups,
         )
-        print("Mid")
+        # print("Mid")
 
         self.up_blocks = nn.ModuleList()
         for idx in list(reversed(range(1, len(channels)))):
             out_channels = in_channels
             attn = attns[idx - 1]
             for _ in range(n_blocks):
-                print("Res", in_channels, out_channels)
+                # print("Res", in_channels, out_channels)
                 self.up_blocks.append(
                     UpBlock(
                         in_channels=in_channels,
@@ -283,7 +283,7 @@ class UNet(nn.Module):
                 )
             in_channels = channels[idx]
             out_channels = channels[idx - 1]
-            print("Res", in_channels, out_channels)
+            # print("Res", in_channels, out_channels)
             self.up_blocks.append(
                 UpBlock(
                     in_channels=in_channels,
@@ -296,7 +296,7 @@ class UNet(nn.Module):
             in_channels = out_channels
 
             if idx > 1:
-                print("Up", out_channels)
+                # print("Up", out_channels)
                 self.up_blocks.append(Upsample(out_channels))
 
         self.fin_block = nn.Sequential(
@@ -335,14 +335,14 @@ class UNet(nn.Module):
         x = self.fin_block(x)
         # print(x.shape)
         return x
-new = UNet(
-    n_diffusion_steps=1000,
-    init_channels=128,
-    channels=(128, 256, 256, 256),
-    attns=(True, True, True, True),
-    n_blocks=2,
-)
-print_n_params(new)
+# new = UNet(
+#     n_diffusion_steps=1000,
+#     init_channels=128,
+#     channels=(128, 256, 256, 256),
+#     attns=(True, True, True, True),
+#     n_blocks=2,
+# )
+# print_n_params(new)
 # x = torch.randn(1, 3, 32, 32)
 # t = torch.randint(0, 1000, (1,))
 # new(x, t)
