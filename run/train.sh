@@ -23,8 +23,9 @@ python3 ../train.py\
     --batch_size=8\
     --lr=0.0003\
     --n_cpus=2\
+    --n_warmup_steps=500\
     --img_size=64\
     --init_channels=128\
     --channels="(128, 128, 256, 256, 512)"\
     --attns="(False, False, True, False, False)\
-    --n_res_blocks=2\
+    --n_blocks=2\

@@ -37,6 +37,7 @@ def get_args():
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--n_cpus", type=int, required=True)
+    parser.add_argument("--n_warmup_steps", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=True)
     # parser.add_argument("--channels", type=int, required=True)
     # parser.add_argument("--channel_mults", type=str, required=True)
@@ -199,14 +200,14 @@ def main():
         device=DEVICE,
     )
 
-    model = DDPM(
-        img_size=args.IMG_SIZE,
-        channels=args.CHANNELS,
-        channel_mults=eval(args.CHANNEL_MULTS),
-        attns=eval(args.ATTNS),
-        n_res_blocks=args.N_RES_BLOCKS,
-        device=DEVICE,
-    )
+    # model = DDPM(
+    #     img_size=args.IMG_SIZE,
+    #     channels=args.CHANNELS,
+    #     channel_mults=eval(args.CHANNEL_MULTS),
+    #     attns=eval(args.ATTNS),
+    #     n_res_blocks=args.N_RES_BLOCKS,
+    #     device=DEVICE,
+    # )
     model = DDPM(
         img_size=args.IMG_SIZE,
         init_channels=args.INIT_CHANNELS,
@@ -219,7 +220,13 @@ def main():
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
 
-    trainer.train(n_epochs=args.N_EPOCHS, model=model, optim=optim, scaler=scaler)
+    trainer.train(
+        n_epochs=args.N_EPOCHS,
+        model=model,
+        optim=optim,
+        scaler=scaler,
+        n_warmup_steps=args.N_WARMUP_STEPS,
+    )
 
 
 if __name__ == "__main__":
