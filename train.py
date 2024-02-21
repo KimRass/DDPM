@@ -2,7 +2,7 @@
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
 
 import torch
-from transformers import AdamW
+from torch.optim import AdamW
 import gc
 import argparse
 from pathlib import Path
