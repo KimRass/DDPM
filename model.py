@@ -177,14 +177,14 @@ class UNet(nn.Module):
         )
 
         channels = (init_channels, *channels)
-        self.down_blocks = nn.ModuleList()
+        self.down_block = nn.ModuleList()
         for idx in range(len(channels) - 1):
             in_channels = channels[idx]
             out_channels = channels[idx + 1]
             attn=attns[idx]
             for _ in range(n_blocks):
                 # print("Res", in_channels, out_channels)
-                self.down_blocks.append(
+                self.down_block.append(
                     ResBlock(
                         in_channels=in_channels,
                         out_channels=out_channels,
@@ -197,7 +197,7 @@ class UNet(nn.Module):
 
             if idx < len(channels) - 2:
                 # print("Down", out_channels)
-                self.down_blocks.append(Downsample(out_channels))
+                self.down_block.append(Downsample(out_channels))
 
         self.mid_block = nn.ModuleList(
             [
@@ -219,13 +219,13 @@ class UNet(nn.Module):
         )
         # print("Mid")
 
-        self.up_blocks = nn.ModuleList()
+        self.up_block = nn.ModuleList()
         for idx in list(reversed(range(1, len(channels)))):
             out_channels = in_channels
             attn = attns[idx - 1]
             for _ in range(n_blocks):
                 # print("Res", in_channels, out_channels)
-                self.up_blocks.append(
+                self.up_block.append(
                     ResBlock(
                         in_channels=in_channels + out_channels,
                         out_channels=out_channels,
@@ -237,7 +237,7 @@ class UNet(nn.Module):
             in_channels = channels[idx]
             out_channels = channels[idx - 1]
             # print("Res", in_channels, out_channels)
-            self.up_blocks.append(
+            self.up_block.append(
                 ResBlock(
                     in_channels=in_channels + out_channels,
                     out_channels=out_channels,
@@ -250,7 +250,7 @@ class UNet(nn.Module):
 
             if idx > 1:
                 # print("Up", out_channels)
-                self.up_blocks.append(Upsample(out_channels))
+                self.up_block.append(Upsample(out_channels))
 
         self.fin_block = nn.Sequential(
             nn.GroupNorm(n_groups, out_channels),
@@ -265,7 +265,7 @@ class UNet(nn.Module):
         # print(t.shape)
 
         xs = [x]
-        for layer in self.down_blocks:
+        for layer in self.down_block:
             if isinstance(layer, Downsample):
                 x = layer(x)
             else:
@@ -273,10 +273,11 @@ class UNet(nn.Module):
             # print(x.shape)
             xs.append(x)
 
-        x = self.mid_block(x, t)
+        for layer in self.mid_block:
+            x = layer(x, t)
         # print(x.shape)
 
-        for layer in self.up_blocks:
+        for layer in self.up_block:
             if isinstance(layer, Upsample):
                 x = layer(x)
             else:
@@ -500,7 +501,7 @@ if __name__ == "__main__":
         attns=(True, True, True, True),
         n_blocks=2,
     )
-    print_n_params(new)
+    # print_n_params(new)
     x = torch.randn(1, 3, 32, 32)
     t = torch.randint(0, 1000, (1,))
     new(x, t)
