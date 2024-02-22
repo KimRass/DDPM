@@ -328,7 +328,8 @@ class DDPM(nn.Module):
         self.fin_beta = fin_beta
 
         self.net = net.to(device)
-        self.n_diffusion_steps = self.net.n_diffusion_steps
+        # self.n_diffusion_steps = self.net.n_diffusion_steps
+        self.n_diffusion_steps = 1000
 
         self.beta = self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"

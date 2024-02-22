@@ -13,7 +13,7 @@ source set_pythonpath.sh
 #     --img_size=64\
 #     --channels=128\
 #     --channel_mults="(1, 2, 2, 2)"\
-#     --attns="(False, True, True, True)\
+#     --attns="(False, True, True, True)"\
 #     --n_res_blocks=2\
 
 python3 ../train.py\
