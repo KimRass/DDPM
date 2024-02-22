@@ -23,10 +23,9 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-from model import UNet, DDPM
-# from old_model import DDPM
-
-torch.set_printoptions(linewidth=70)
+# from model import UNet, DDPM
+from model import DDPM
+from old_model import OldUNet
 
 
 def get_args():
@@ -176,6 +175,8 @@ class Trainer(object):
 
 
 def main():
+    torch.set_printoptions(linewidth=70)
+
     DEVICE = get_device()
     args = get_args()
     set_seed(args.SEED)
@@ -201,28 +202,13 @@ def main():
         device=DEVICE,
     )
 
-    # model = DDPM(
-    #     img_size=args.IMG_SIZE,
-    #     channels=args.CHANNELS,
-    #     channel_mults=eval(args.CHANNEL_MULTS),
-    #     attns=eval(args.ATTNS),
-    #     n_res_blocks=args.N_RES_BLOCKS,
-    #     device=DEVICE,
-    # )
-    # model = DDPM(
-    #     img_size=args.IMG_SIZE,
+    # net = UNet(
     #     init_channels=args.INIT_CHANNELS,
     #     channels=eval(args.CHANNELS),
     #     attns=eval(args.ATTNS),
     #     n_blocks=args.N_BLOCKS,
-    #     device=DEVICE,
     # )
-    net = UNet(
-        init_channels=args.INIT_CHANNELS,
-        channels=eval(args.CHANNELS),
-        attns=eval(args.ATTNS),
-        n_blocks=args.N_BLOCKS,
-    )
+    net = OldUNet()
     model = DDPM(img_size=args.IMG_SIZE, net=net, device=DEVICE)
     print_n_params(model)
     optim = AdamW(model.parameters(), lr=args.LR)

@@ -153,6 +153,8 @@ class OldUNet(nn.Module):
 
         assert len(attns) == len(channel_mults)
 
+        self.n_diffusion_steps = n_diffusion_steps
+
         time_channels = channels * 4
         self.time_embedding = TimeEmbedding(
             n_diffusion_steps=n_diffusion_steps, time_channels=time_channels,
