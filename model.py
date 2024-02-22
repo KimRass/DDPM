@@ -374,7 +374,8 @@ class DDPM(nn.Module):
         return noisy_image
 
     def forward(self, noisy_image, diffusion_step):
-        return self.net(noisy_image, diffusion_step)
+        # return self.net(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        return self.net(noisy_image, diffusion_step).sample
 
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
