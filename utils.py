@@ -60,8 +60,16 @@ def _to_pil(img):
     return img
 
 
+def create_dir(x):
+    x = Path(x)
+    if x.is_dir():
+        x.mkdir(parents=True, exist_ok=True)
+    else:
+        x.parent.mkdir(parents=True, exist_ok=True)
+
+
 def save_image(image, save_path):
-    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    create_dir(save_path)
     _to_pil(image).save(str(save_path), quality=100)
 
 

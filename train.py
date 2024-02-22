@@ -23,7 +23,7 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-from model import DDPM
+from model import UNet, DDPM
 # from old_model import DDPM
 
 torch.set_printoptions(linewidth=70)
@@ -209,14 +209,21 @@ def main():
     #     n_res_blocks=args.N_RES_BLOCKS,
     #     device=DEVICE,
     # )
-    model = DDPM(
-        img_size=args.IMG_SIZE,
+    # model = DDPM(
+    #     img_size=args.IMG_SIZE,
+    #     init_channels=args.INIT_CHANNELS,
+    #     channels=eval(args.CHANNELS),
+    #     attns=eval(args.ATTNS),
+    #     n_blocks=args.N_BLOCKS,
+    #     device=DEVICE,
+    # )
+    net = UNet(
         init_channels=args.INIT_CHANNELS,
         channels=eval(args.CHANNELS),
         attns=eval(args.ATTNS),
         n_blocks=args.N_BLOCKS,
-        device=DEVICE,
     )
+    model = DDPM(img_size=args.IMG_SIZE, net=net, device=DEVICE)
     print_n_params(model)
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)

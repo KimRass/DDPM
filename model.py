@@ -10,12 +10,11 @@ from torch import nn
 from torch.nn import functional as F
 import numpy as np
 import imageio
-import math
 from tqdm import tqdm
-from pathlib import Path
 import contextlib
 
-from utils import print_n_params, image_to_grid, save_image
+from data import CelebADS
+from utils import print_n_params, image_to_grid
 
 
 class Swish(nn.Module):
@@ -169,6 +168,8 @@ class UNet(nn.Module):
 
         assert len(attns) == len(channels)
 
+        self.n_diffusion_steps = n_diffusion_steps
+
         self.init_conv = nn.Conv2d(3, init_channels, 3, 1, 1)
 
         self.time_channels = init_channels * 4
@@ -306,14 +307,15 @@ class DDPM(nn.Module):
     # "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
     def __init__(
         self,
+        net,
         img_size,
-        init_channels,
-        channels,
-        attns,
-        n_blocks,
+        # init_channels,
+        # channels,
+        # attns,
+        # n_blocks,
         device,
         image_channels=3,
-        n_diffusion_steps=1000,
+        # n_diffusion_steps=1000,
         init_beta=0.0001,
         fin_beta=0.02,
     ):
@@ -322,22 +324,16 @@ class DDPM(nn.Module):
         self.img_size = img_size
         self.device = device
         self.image_channels = image_channels
-        self.n_diffusion_steps = n_diffusion_steps
         self.init_beta = init_beta
         self.fin_beta = fin_beta
+
+        self.net = net.to(device)
+        self.n_diffusion_steps = self.net.n_diffusion_steps
 
         self.beta = self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
-
-        self.net = UNet(
-            n_diffusion_steps=n_diffusion_steps,
-            init_channels=init_channels,
-            channels=channels,
-            attns=attns,
-            n_blocks=n_blocks,
-        ).to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -417,20 +413,39 @@ class DDPM(nn.Module):
             denoised_image = mean
         return denoised_image
 
-    def perform_denoising_process(self, noisy_image, diffusion_step_idx):
+    def perform_denoising_process(self, noisy_image, start_diffusion_step_idx, n_frames=None):
+        if n_frames is not None:
+            frames = list()
+
         x = noisy_image
-        pbar = tqdm(range(diffusion_step_idx, -1, -1), leave=False)
-        for trg_diffusion_step in pbar:
+        pbar = tqdm(range(start_diffusion_step_idx, -1, -1), leave=False)
+        for diffusion_step_idx in pbar:
             pbar.set_description("Denoising...")
 
-            x = self.take_denoising_step(x, diffusion_step_idx=trg_diffusion_step)
-        return x
+            x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
+
+            if n_frames is not None and (
+                diffusion_step_idx % (self.n_diffusion_steps // n_frames) == 0
+            ):
+                frames.append(self._get_frame(x))
+        return frames if n_frames is not None else x
 
     def sample(self, batch_size):
         random_noise = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
         return self.perform_denoising_process(
-            noisy_image=random_noise, diffusion_step_idx=self.n_diffusion_steps - 1,
+            noisy_image=random_noise,
+            start_diffusion_step_idx=self.n_diffusion_steps - 1,
+            n_frames=None,
         )
+
+    def vis_denoising_process(self, batch_size, save_path, n_frames=100):
+        random_noise = self.sample_noise(batch_size=batch_size)
+        frames = self.perform_denoising_process(
+            noisy_image=random_noise,
+            start_diffusion_step_idx=self.n_diffusion_steps - 1,
+            n_frames=n_frames,
+        )
+        imageio.mimsave(save_path, frames)
 
     @torch.inference_mode()
     def reconstruct(self, noisy_image, noise, diffusion_step):
@@ -439,31 +454,29 @@ class DDPM(nn.Module):
 
     @staticmethod
     def _get_frame(x):
-        b, _, _, _ = x.shape
-        grid = image_to_grid(x, n_cols=int(b ** 0.5))
+        grid = image_to_grid(x, n_cols=int(x.size(0) ** 0.5))
         frame = np.array(grid)
         return frame
 
-    def vis_denoising_process(self, batch_size, save_path, n_frames=100):
-        with imageio.get_writer(save_path, mode="I") as writer:
-            x = self.sample_noise(batch_size=batch_size)
-            for diffusion_step_idx in range(self.n_diffusion_steps, 0, -1):
-                x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
-
-                if diffusion_step_idx % (self.n_diffusion_steps // n_frames) == 0:
-                    frame = self._get_frame(x)
-                    writer.append_data(frame)
-
-    @staticmethod
-    def _interpolate_between_images(x, y, n_points):
+    def _interpolate_between_images(self, x, y, n_points):
         _, b, c, d = x.shape
-        lambs = torch.linspace(start=0, end=1, steps=n_points)
+        lambs = torch.linspace(start=0, end=1, steps=n_points).to(self.device)
         lambs = lambs[:, None, None, None].expand(n_points, b, c, d)
-        return ((1 - lambs) * x + lambs * y)
+        return (1 - lambs) * x + lambs * y
 
-    def interpolate(
-        self, ori_image1, ori_image2, interpolate_at=500, n_points=10,
-    ):
+    def get_ori_images(self, data_dir, image_idx1, image_idx2):
+        test_ds = CelebADS(
+            data_dir=data_dir, split="test", img_size=self.img_size, hflip=False,
+        )
+        ori_image1 = test_ds[image_idx1][None, ...].to(self.device)
+        ori_image2 = test_ds[image_idx2][None, ...].to(self.device)
+        return ori_image1, ori_image2
+
+    def interpolate(self, data_dir, image_idx1, image_idx2, interpolate_at=500, n_points=10):
+        ori_image1, ori_image2 = self.get_ori_images(
+            data_dir=data_dir, image_idx1=image_idx1, image_idx2=image_idx2,
+        )
+
         diffusion_step = self.batchify_diffusion_steps(interpolate_at, batch_size=1)
         noisy_image1 = self.perform_diffusion_process(
             ori_image=ori_image1, diffusion_step=diffusion_step,
@@ -473,18 +486,30 @@ class DDPM(nn.Module):
         )
 
         x = self._interpolate_between_images(noisy_image1, noisy_image2, n_points=n_points)
-        for diffusion_step_idx in range(interpolate_at, 0, -1):
-            x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
-        return torch.cat([ori_image1, x, ori_image2], dim=0)
+        denoised_image = self.perform_denoising_process(
+            noisy_image=x,
+            start_diffusion_step_idx=interpolate_at,
+            n_frames=None,
+        )
+        return torch.cat([ori_image1, denoised_image, ori_image2], dim=0)
 
-    def coarse_to_fine_interpolate(self, ori_image1, ori_image2, n_rows=9, n_points=10):
+    def coarse_to_fine_interpolate(self, data_dir, image_idx1, image_idx2, n_rows=9, n_points=10):
         rows = list()
-        for interpolate_at in range(
-            self.n_diffusion_steps, -1, - self.n_diffusion_steps // (n_rows - 1),
-        ):
+        pbar = tqdm(
+            range(
+                self.n_diffusion_steps - 1,
+                -1,
+                - self.n_diffusion_steps // (n_rows - 1),
+            ),
+            leave=False,
+        )
+        for interpolate_at in pbar:
+            pbar.set_description("Coarse to fine interpolating...")
+
             row = self.interpolate(
-                ori_image1=ori_image1,
-                ori_image2=ori_image2,
+                data_dir=data_dir,
+                image_idx1=image_idx1,
+                image_idx2=image_idx2,
                 interpolate_at=interpolate_at,
                 n_points=n_points,
             )

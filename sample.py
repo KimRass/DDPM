@@ -1,13 +1,11 @@
 # References:
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
-    # https://nn.labml.ai/diffusion/stable_diffusion/sampler/ddpm.html
 
 import torch
 import argparse
 
-from utils import get_config, save_image
-from model import DDPM
-from celeba import CelebADataset
+from utils import get_device, image_to_grid, save_image
+from model import UNet, DDPM
 
 
 def get_args():
@@ -17,73 +15,75 @@ def get_args():
         "--mode",
         type=str,
         required=True,
-        choices=["normal", "progression", "interpolation", "coarse_to_fine"],
+        choices=["normal", "denoising_process", "interpolation", "coarse_to_fine"],
     )
-    parser.add_argument("--ckpt_path", type=str, required=True)
+    parser.add_argument("--model_params", type=str, required=True)
     parser.add_argument("--save_path", type=str, required=True)
 
-    parser.add_argument("--batch_size", type=int, required=False) # For `"normal"`, `"progression"`
+    # For `"normal"`, `"denoising_process"`
+    parser.add_argument("--batch_size", type=int, required=False)
 
-    parser.add_argument("--data_dir", type=str, required=False) # For `"interpolation"`, `"coarse_to_fine"`
-    parser.add_argument("--interpolate_at", type=int, default=500, required=False) # For `"interpolation"`
-    parser.add_argument("--idx1", type=int, required=False) # For `"interpolation"`, `"coarse_to_fine"`
-    parser.add_argument("--idx2", type=int, required=False) # For `"interpolation"`, `"coarse_to_fine"`
+    # For `"interpolation"`, `"coarse_to_fine"`
+    parser.add_argument("--data_dir", type=str, required=False)
+    parser.add_argument("--image_idx1", type=int, required=False)
+    parser.add_argument("--image_idx2", type=int, required=False)
+
+    # Architecture
+    parser.add_argument("--img_size", type=int, required=True)
+    parser.add_argument("--init_channels", type=int, required=True)
+    parser.add_argument("--channels", type=str, required=True)
+    parser.add_argument("--attns", type=str, required=True)
+    parser.add_argument("--n_blocks", type=int, default=2, required=False)
 
     args = parser.parse_args()
+
+    args_dict = vars(args)
+    new_args_dict = dict()
+    for k, v in args_dict.items():
+        new_args_dict[k.upper()] = v
+    args = argparse.Namespace(**new_args_dict)
     return args
 
 
-def get_ddpm_from_checkpoint(ckpt_path, n_timesteps, init_beta, fin_beta, device):
-    model = DDPM(
-        n_timesteps=n_timesteps,
-        init_beta=init_beta,
-        fin_beta=fin_beta,
-    ).to(device)
-    state_dict = torch.load(str(ckpt_path), map_location=device)
-    model.load_state_dict(state_dict)
-    return model
-
-
 if __name__ == "__main__":
+    torch.set_printoptions(linewidth=70)
+
+    DEVICE = get_device()
     args = get_args()
-    CONFIG = get_config(args)
-
-    model = get_ddpm_from_checkpoint(
-        ckpt_path=CONFIG["CKPT_PATH"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
-        init_beta=CONFIG["INIT_BETA"],
-        fin_beta=CONFIG["FIN_BETA"],
-        device=CONFIG["DEVICE"],
+    
+    net = UNet(
+        init_channels=args.INIT_CHANNELS,
+        channels=eval(args.CHANNELS),
+        attns=eval(args.ATTNS),
+        n_blocks=args.N_BLOCKS,
     )
+    model = DDPM(img_size=args.IMG_SIZE, net=net, device=DEVICE)
+    state_dict = torch.load(str(args.MODEL_PARAMS), map_location=DEVICE)
+    model.load_state_dict(state_dict)
 
-    if CONFIG["MODE"] == "progression":
-        model.progressively_sample(
-            batch_size=CONFIG["BATCH_SIZE"],
-            n_channels=CONFIG["N_CHANNELS"],
-            img_size=CONFIG["IMG_SIZE"],
-            device=CONFIG["DEVICE"],
-            save_path=CONFIG["SAVE_PATH"],
+    if args.MODE == "denoising_process":
+        model.vis_denoising_process(
+            batch_size=args.BATCH_SIZE, save_path=args.SAVE_PATH,
         )
     else:
-        if CONFIG["MODE"] == "normal":
-            gen_image = model.sample(
-                batch_size=CONFIG["BATCH_SIZE"],
-                n_channels=CONFIG["N_CHANNELS"],
-                img_size=CONFIG["IMG_SIZE"],
-                device=CONFIG["DEVICE"],
-            )
+        if args.MODE == "normal":
+            gen_image = model.sample(args.BATCH_SIZE)
+            gen_grid = image_to_grid(gen_image, n_cols=int(args.BATCH_SIZE ** 0.5))
+            save_image(gen_grid, save_path=args.SAVE_PATH)
         else:
-            ds = CelebADataset(data_dir=CONFIG["DATA_DIR"], img_size=CONFIG["IMG_SIZE"])
-            ori_image1 = ds[CONFIG["IDX1"]][None, :]
-            ori_image2 = ds[CONFIG["IDX2"]][None, :]
-            if CONFIG["MODE"]  == "interpolation":
+            if args.MODE  == "interpolation":
                 gen_image = model.interpolate(
-                    ori_image1=ori_image1,
-                    ori_image2=ori_image2,
-                    interpolate_at=CONFIG["INTERPOLATE_AT"],
+                    data_dir=args.DATA_DIR,
+                    image_idx1=args.IMAGE_IDX1,
+                    image_idx2=args.IMAGE_IDX2,
                 )
+                gen_grid = image_to_grid(gen_image, n_cols=12)
+                save_image(gen_grid, save_path=args.SAVE_PATH)
             else:
                 gen_image = model.coarse_to_fine_interpolate(
-                    ori_image1=ori_image1, ori_image2=ori_image2,
+                    data_dir=args.DATA_DIR,
+                    image_idx1=args.IMAGE_IDX1,
+                    image_idx2=args.IMAGE_IDX2,
                 )
-        save_image(gen_image, path=CONFIG["SAVE_PATH"])
+                gen_grid = image_to_grid(gen_image, n_cols=12)
+                save_image(gen_grid, save_path=args.SAVE_PATH)

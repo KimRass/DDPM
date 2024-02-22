@@ -38,7 +38,9 @@ class CelebADS(Dataset):
         return self.transform(image=np.array(image))["image"]
 
 
-def dses_to_dls(train_ds, val_ds, batch_size, n_cpus):
+def get_train_and_val_dls(data_dir, img_size, batch_size, n_cpus):
+    train_ds = CelebADS(data_dir=data_dir, split="train", img_size=img_size, hflip=True)
+    val_ds = CelebADS(data_dir=data_dir, split="valid", img_size=img_size, hflip=False)
     train_dl = DataLoader(
         train_ds,
         batch_size=batch_size,
@@ -60,13 +62,16 @@ def dses_to_dls(train_ds, val_ds, batch_size, n_cpus):
     return train_dl, val_dl
 
 
-def get_train_and_val_dls(data_dir, img_size, batch_size, n_cpus):
-    # from torch.utils.data import Subset
-    train_ds = CelebADS(data_dir=data_dir, split="train", img_size=img_size, hflip=True)
-    # train_ds = Subset(train_ds, range(batch_size))
-    val_ds = CelebADS(data_dir=data_dir, split="valid", img_size=img_size, hflip=False)
-    return dses_to_dls(
-        train_ds=train_ds, val_ds=val_ds, batch_size=batch_size, n_cpus=n_cpus,
+def get_test_dl(data_dir, img_size, batch_size, n_cpus):
+    test_ds = CelebADS(data_dir=data_dir, split="test", img_size=img_size, hflip=False)
+    return DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        pin_memory=False,
+        drop_last=True,
+        persistent_workers=False,
+        num_workers=n_cpus,
     )
 
 

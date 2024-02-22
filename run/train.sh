@@ -27,5 +27,5 @@ python3 ../train.py\
     --img_size=64\
     --init_channels=128\
     --channels="(128, 128, 256, 256, 512)"\
-    --attns="(False, False, True, False, False)\
+    --attns="(False, False, True, False, False)"\
     --n_blocks=2\

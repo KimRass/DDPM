@@ -11,18 +11,18 @@
 python3 sample.py\
     --mode="normal"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --save_path="generated_images/normal_and_progression/1.jpg"\
+    --save_path="generated_images/normal/1.jpg"\
     --batch_size=4
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
-## 2) `"progression"` mode
+## 2) `"denoising_process"` mode
 ```bash
 # e.g.,
 python3 sample.py\
-    --mode="progression"\
+    --mode="denoising_process"\
     --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --save_path="generated_images/normal_and_progression/1.gif"\
+    --save_path="generated_images/denoising_process/1.gif"\
     --batch_size=4
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
