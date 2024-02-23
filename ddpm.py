@@ -134,6 +134,12 @@ class DDPM(nn.Module):
             denoised_image = mean
         return denoised_image
 
+    @staticmethod
+    def _get_frame(x):
+        grid = image_to_grid(x, n_cols=int(x.size(0) ** 0.5))
+        frame = np.array(grid)
+        return frame
+
     def perform_denoising_process(self, noisy_image, start_diffusion_step_idx, n_frames=None):
         if n_frames is not None:
             frames = list()
@@ -168,19 +174,7 @@ class DDPM(nn.Module):
         )
         imageio.mimsave(save_path, frames)
 
-    @staticmethod
-    def _get_frame(x):
-        grid = image_to_grid(x, n_cols=int(x.size(0) ** 0.5))
-        frame = np.array(grid)
-        return frame
-
-    def _interpolate_between_images(self, x, y, n_points):
-        _, b, c, d = x.shape
-        lambs = torch.linspace(start=0, end=1, steps=n_points).to(self.device)
-        lambs = lambs[:, None, None, None].expand(n_points, b, c, d)
-        return (1 - lambs) * x + lambs * y
-
-    def get_ori_images(self, data_dir, image_idx1, image_idx2):
+    def _get_ori_images(self, data_dir, image_idx1, image_idx2):
         test_ds = CelebADS(
             data_dir=data_dir, split="test", img_size=self.img_size, hflip=False,
         )
@@ -188,8 +182,14 @@ class DDPM(nn.Module):
         ori_image2 = test_ds[image_idx2][None, ...].to(self.device)
         return ori_image1, ori_image2
 
+    def _get_linearly_interpolated_image(self, x, y, n_points):
+        weight = torch.linspace(
+            start=0, end=1, steps=n_points, device=self.device,
+        )[:, None, None, None]
+        return (1 - weight) * x + weight * y
+
     def interpolate(self, data_dir, image_idx1, image_idx2, interpolate_at=500, n_points=10):
-        ori_image1, ori_image2 = self.get_ori_images(
+        ori_image1, ori_image2 = self._get_ori_images(
             data_dir=data_dir, image_idx1=image_idx1, image_idx2=image_idx2,
         )
 
@@ -201,7 +201,7 @@ class DDPM(nn.Module):
             ori_image=ori_image2, diffusion_step=diffusion_step,
         )
 
-        x = self._interpolate_between_images(noisy_image1, noisy_image2, n_points=n_points)
+        x = self._get_linearly_interpolated_image(noisy_image1, noisy_image2, n_points=n_points)
         denoised_image = self.perform_denoising_process(
             noisy_image=x,
             start_diffusion_step_idx=interpolate_at,

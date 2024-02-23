@@ -40,14 +40,14 @@ def get_args():
     return args
 
 
-if __name__ == "__main__":
+def main():
     torch.set_printoptions(linewidth=70)
 
     DEVICE = get_device()
     args = get_args()
     
     net = UNet()
-    model = DDPM(img_size=args.IMG_SIZE, model=net, device=DEVICE)
+    model = DDPM(model=net, img_size=args.IMG_SIZE, device=DEVICE)
     state_dict = torch.load(str(args.MODEL_PARAMS), map_location=DEVICE)
     model.load_state_dict(state_dict)
 
@@ -69,7 +69,7 @@ if __name__ == "__main__":
                 )
                 gen_grid = image_to_grid(gen_image, n_cols=12)
                 save_image(gen_grid, save_path=args.SAVE_PATH)
-            else:
+            elif args.MODE  == "coarse_to_fine":
                 gen_image = model.coarse_to_fine_interpolate(
                     data_dir=args.DATA_DIR,
                     image_idx1=args.IMAGE_IDX1,
@@ -77,3 +77,7 @@ if __name__ == "__main__":
                 )
                 gen_grid = image_to_grid(gen_image, n_cols=12)
                 save_image(gen_grid, save_path=args.SAVE_PATH)
+
+
+if __name__ == "__main__":
+    main()

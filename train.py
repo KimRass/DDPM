@@ -193,7 +193,7 @@ def main():
     )
 
     net = UNet()
-    model = DDPM(img_size=args.IMG_SIZE, model=net, device=DEVICE)
+    model = DDPM(model=net, img_size=args.IMG_SIZE, device=DEVICE)
     print_n_params(model)
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
