@@ -15,7 +15,7 @@ python3 ../sample.py\
     --batch_size=1\
     --img_size=64
 ```
-- <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
+- <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="450">
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
 ## 2) `"denoising_process"` mode
 ```bash
