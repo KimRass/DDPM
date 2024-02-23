@@ -168,11 +168,6 @@ class DDPM(nn.Module):
         )
         imageio.mimsave(save_path, frames)
 
-    @torch.inference_mode()
-    def reconstruct(self, noisy_image, noise, diffusion_step):
-        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
-        return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)
-
     @staticmethod
     def _get_frame(x):
         grid = image_to_grid(x, n_cols=int(x.size(0) ** 0.5))
