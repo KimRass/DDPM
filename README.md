@@ -1,8 +1,8 @@
 # 1. Pre-trained Models
 | | | |
 |-|-|-|
-| [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing) | Trained on CelebA 32 × 32 for 29 epochs | - |
-| [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing) | Trained on CelebA 64 × 64 for 29 epochs | FID 10.25, IS 1.00<br>on 28,900 samples ("/samples/for_evaluation") |
+| [ddpm_celeba_32×32.pth](https://drive.google.com/file/d/10nYTU1NNv3GghPwb8Mgp29Seni6iTI1a/view?usp=sharing) | Trained on CelebA 32 × 32 |
+| [ddpm_celeba_64×64.pth](https://drive.google.com/file/d/1S5qs_fib84rbMU1pbAPY6YkO8WkC8GOQ/view?usp=sharing) | Trained on CelebA 64 × 64 |
 
 # 2. Sampling
 ## 1) `"normal"` mode
@@ -64,8 +64,8 @@ python3 ../sample.py\
 # 3. Evaluation
 ```bash
 # e.g.,
-python3 evaluate.py
-    --ckpt_path="checkpoints/64×64_epoch_29.pth"\
+python3 eval.py
+    --ckpt_path=".....pth"\
     --real_data_dir="../img_align_celeba/"\
     --gen_data_dir="../ddpm_eval_images/"\
     --batch_size=32\
