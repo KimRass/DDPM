@@ -8,37 +8,39 @@
 ## 1) `"normal"` mode
 ```bash
 # e.g.,
-python3 sample.py\
+python3 ../sample.py\
     --mode="normal"\
-    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --save_path="generated_images/normal/1.jpg"\
-    --batch_size=4
+    --model_params="....pth
+    --save_path="samples/normal/0.jpg"\
+    --batch_size=1\
+    --img_size=64
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="350">
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
 ## 2) `"denoising_process"` mode
 ```bash
 # e.g.,
-python3 sample.py\
+python3 ../sample.py\
     --mode="denoising_process"\
-    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --save_path="generated_images/denoising_process/1.gif"\
-    --batch_size=4
+    --model_params="....pth
+    --save_path="samples/denoising_process/0.gif"\
+    --img_size=64
+    --batch_size=1\
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
 ## 3) `"interpolation"` mode
 ```bash
 # e.g.,
-python3 sample.py
+python3 ../sample.py\
     --mode="interpolation"\
-    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --save_path="generated_images/interpolation/1.jpg"\
-    --data_dir="../img_align_celeba/"\
-    --idx1=10000\
-    --idx2=11000\
-    --timestep=300
+    --model_params="....pth
+    --save_path="samples/interpolation/0.jpg"\
+    --img_size=64
+    --data_dir="/Users/jongbeomkim/Documents/datasets/"\
+    --image_idx1=50\
+    --image_idx2=100\
 ```
-- Start timestep of 500
+- `interpolate_at=500`
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/444c4c27-774c-4ec4-b07f-f2cbf7012433" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/ed7549de-73e1-4ea1-babe-0f1288584d5f" width="700">
     - <img src="https://github.com/KimRass/DDPM/assets/105417680/32c623d9-8e16-4913-a279-c48f75c05ffd" width="700">
@@ -48,14 +50,14 @@ python3 sample.py
 - Please refer to "Figure 9" in the paper for the meaning of each row and column.
 ```bash
 # e.g.,
-python3 sample.py
+python3 ../sample.py\
     --mode="coarse_to_fine"\
-    --ckpt_path="checkpoints/ddpm_celeba_64×64.pth"\
-    --save_path="generated_images/interpolation/1.jpg"\
-    --data_dir="../img_align_celeba/"\
-    --idx1=10000\
-    --idx2=11000\
-    --timestep=300
+    --model_params="....pth
+    --save_path="samples/coarse_to_fine_interpolation/0.jpg"\
+    --img_size=64
+    --data_dir="/Users/jongbeomkim/Documents/datasets/"\
+    --image_idx1=50\
+    --image_idx2=100\
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/6dcf9ba6-5988-44ed-92b2-a63d9db09719" width="700">
 
