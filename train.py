@@ -25,9 +25,8 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-# from model import UNet, DDPM
-from model import DDPM
-from old_model import OldUNet
+from unet import UNet
+from ddpm import DDPM
 
 
 def get_args():
@@ -41,16 +40,7 @@ def get_args():
     parser.add_argument("--n_cpus", type=int, required=True)
     parser.add_argument("--n_warmup_steps", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=True)
-    # parser.add_argument("--channels", type=int, required=True)
-    # parser.add_argument("--channel_mults", type=str, required=True)
-    # parser.add_argument("--attns", type=str, required=True)
-    # parser.add_argument("--n_res_blocks", type=int, default=2, required=False)
-    parser.add_argument("--init_channels", type=int, required=True)
-    parser.add_argument("--channels", type=str, required=True)
-    parser.add_argument("--attns", type=str, required=True)
-    parser.add_argument("--n_blocks", type=int, default=2, required=False)
 
-    parser.add_argument("--run_id", type=str, required=False)
     parser.add_argument("--seed", type=int, default=223, required=False)
 
     args = parser.parse_args()
@@ -64,8 +54,7 @@ def get_args():
 
 
 class Trainer(object):
-    def __init__(self, run_id, train_dl, val_dl, save_dir, device):
-        self.run_id = run_id
+    def __init__(self, train_dl, val_dl, save_dir, device):
         self.train_dl = train_dl
         self.val_dl = val_dl
         self.save_dir = Path(save_dir)
@@ -197,42 +186,14 @@ def main():
         n_cpus=args.N_CPUS,
     )
     trainer = Trainer(
-        run_id=args.RUN_ID,
         train_dl=train_dl,
         val_dl=val_dl,
         save_dir=args.SAVE_DIR,
         device=DEVICE,
     )
 
-    # net = UNet(
-    #     init_channels=args.INIT_CHANNELS,
-    #     channels=eval(args.CHANNELS),
-    #     attns=eval(args.ATTNS),
-    #     n_blocks=args.N_BLOCKS,
-    # )
-    # net = OldUNet()
-    net = UNet2DModel(
-        sample_size=args.IMG_SIZE,  # the target image resolution
-        in_channels=3,  # the number of input channels, 3 for RGB images
-        out_channels=3,  # the number of output channels
-        layers_per_block=2,  # how many ResNet layers to use per UNet block
-        block_out_channels=(128, 128, 256, 256, 512),
-        down_block_types=( 
-            "DownBlock2D",
-            "DownBlock2D", 
-            "DownBlock2D", 
-            "AttnDownBlock2D",
-            "DownBlock2D",
-        ), 
-        up_block_types=(
-            "UpBlock2D", 
-            "AttnUpBlock2D",
-            "UpBlock2D", 
-            "UpBlock2D", 
-            "UpBlock2D"  
-        ),
-    )
-    model = DDPM(img_size=args.IMG_SIZE, net=net, device=DEVICE)
+    net = UNet()
+    model = DDPM(img_size=args.IMG_SIZE, model=net, device=DEVICE)
     print_n_params(model)
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)

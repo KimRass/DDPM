@@ -5,7 +5,8 @@ import torch
 import argparse
 
 from utils import get_device, image_to_grid, save_image
-from model import UNet, DDPM
+from unet import UNet
+from ddpm import DDPM
 
 
 def get_args():
@@ -19,6 +20,7 @@ def get_args():
     )
     parser.add_argument("--model_params", type=str, required=True)
     parser.add_argument("--save_path", type=str, required=True)
+    parser.add_argument("--img_size", type=int, required=True)
 
     # For `"normal"`, `"denoising_process"`
     parser.add_argument("--batch_size", type=int, required=False)
@@ -27,13 +29,6 @@ def get_args():
     parser.add_argument("--data_dir", type=str, required=False)
     parser.add_argument("--image_idx1", type=int, required=False)
     parser.add_argument("--image_idx2", type=int, required=False)
-
-    # Architecture
-    parser.add_argument("--img_size", type=int, required=True)
-    parser.add_argument("--init_channels", type=int, required=True)
-    parser.add_argument("--channels", type=str, required=True)
-    parser.add_argument("--attns", type=str, required=True)
-    parser.add_argument("--n_blocks", type=int, default=2, required=False)
 
     args = parser.parse_args()
 
@@ -51,13 +46,8 @@ if __name__ == "__main__":
     DEVICE = get_device()
     args = get_args()
     
-    net = UNet(
-        init_channels=args.INIT_CHANNELS,
-        channels=eval(args.CHANNELS),
-        attns=eval(args.ATTNS),
-        n_blocks=args.N_BLOCKS,
-    )
-    model = DDPM(img_size=args.IMG_SIZE, net=net, device=DEVICE)
+    net = UNet()
+    model = DDPM(img_size=args.IMG_SIZE, model=net, device=DEVICE)
     state_dict = torch.load(str(args.MODEL_PARAMS), map_location=DEVICE)
     model.load_state_dict(state_dict)
 

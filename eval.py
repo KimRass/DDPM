@@ -11,12 +11,9 @@ import scipy
 from tqdm import tqdm
 import math
 import argparse
-from pathlib import Path
 
-from utils import get_config
 from inceptionv3 import InceptionV3
-from sample import get_ddpm_from_checkpoint
-from celeba import CelebADataset, ImageGridDataset
+from data import CelebADS, ImageGridDataset
 
 
 def get_args():
@@ -73,7 +70,7 @@ def get_inception_score(prob, eps=1e-16):
 
 
 def get_dls(real_data_dir, gen_data_dir, batch_size, img_size, n_cpus, n_cells, padding):
-    real_ds = CelebADataset(data_dir=real_data_dir, img_size=img_size)
+    real_ds = CelebADS(data_dir=real_data_dir, img_size=img_size)
     real_dl = DataLoader(
         real_ds,
         batch_size=batch_size,
@@ -164,35 +161,3 @@ class Evaluator(object):
         if self.mode in ["is", "both"]:
             inception_score = get_inception_score(gen_prob)
             print(f"[ IS: {inception_score:.2f} ]")
-
-
-if __name__ == "__main__":
-    args = get_args()
-    CONFIG = get_config(config_path=Path(__file__).parent/"configs/flickr.yaml", args=args)
-
-    ddpm = get_ddpm_from_checkpoint(
-        ckpt_path=CONFIG["CKPT_PATH"],
-        n_timesteps=CONFIG["N_TIMESTEPS"],
-        init_beta=CONFIG["INIT_BETA"],
-        fin_beta=CONFIG["FIN_BETA"],
-        device=CONFIG["DEVICE"],
-    )
-    real_dl, gen_dl = get_dls(
-        real_data_dir=CONFIG["REAL_DATA_DIR"],
-        gen_data_dir=CONFIG["GEN_DATA_DIR"],
-        batch_size=CONFIG["BATCH_SIZE"],
-        img_size=CONFIG["IMG_SIZE"],
-        n_cpus=CONFIG["N_CPUS"],
-        n_cells=CONFIG["N_CELLS"],
-        padding=CONFIG["PADDING"],
-    )
-    evaluator = Evaluator(
-        ddpm=ddpm,
-        n_eval_imgs=CONFIG["N_EVAL_IMGS"],
-        batch_size=CONFIG["BATCH_SIZE"],
-        real_dl=real_dl,
-        gen_dl=gen_dl,
-        mode="both",
-        device=CONFIG["DEVICE"],
-    )
-    evaluator.evaluate()

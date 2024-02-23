@@ -78,6 +78,8 @@ python3 evaluate.py
 - Timestep이 매우 커질 때 이미지가 Normal gaussian distribution을 따르는 이유는?
     $$\prod_{s=1}^{t}{\alpha_{s}}$$
     - 1보다 작은 많은 수들을 서로 곱할 경우 0에 수렴합니다.
+## 2) FID (Frechet Inception Distance)
+$$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma_{Y} - 2\sqrt{\Sigma_{X}\Sigma_{Y}}\big)$$
 <!-- - Forward (diffusion) process
     - We define the forward diffusion process which adds Gaussian noise at each time step $t$, according to a known variance schedule $0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$ as
     $$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \beta_{t}I)$$
@@ -99,7 +101,7 @@ python3 evaluate.py
 ## 2) DDIM
 - Backward (denoising) process
     $$x_{t - 1} = \sqrt{\alpha_{t - 1}}\Bigg(\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}}{\sqrt{\alpha_{t}}}\Bigg) + \sqrt{1 - \alpha_{t - 1}}\epsilon_{\theta}$$ -->
-## 3) Kullback–Leibler Divergence (KL Divergence)
+<!-- ## 4) Kullback–Leibler Divergence (KL Divergence)
 - Also called 'relative entropy' and 'I-divergence'.
 $$D_{KL}(P || Q)$$
 - A measure of how one probability distribution $P$ is different from a second, reference probability distribution $Q$.
@@ -107,9 +109,7 @@ $$D_{KL}(P || Q)$$
 $$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\bigg)$$
 - For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
 $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
-- where $p$ and $q$ denote the probability densities of $P$ and $Q$.
-## 4) FID (Frechet Inception Distance)
-$$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma_{Y} - 2\sqrt{\Sigma_{X}\Sigma_{Y}}\big)$$
+- where $p$ and $q$ denote the probability densities of $P$ and $Q$. -->
 
 # 5. References
 - https://huggingface.co/blog/annotated-diffusion
@@ -117,6 +117,5 @@ $$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma
 - https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
 - https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence
 - https://junia3.github.io/blog/DDPMproof
-<!-- - https://medium.com/mlearning-ai/understanding-the-diffusion-model-and-the-theory-tensorflow-cafcd5752b98 -->
 - https://wandb.ai/capecape/train_sd/reports/How-To-Train-a-Conditional-Diffusion-Model-From-Scratch--VmlldzoyNzIzNTQ1
 - https://keras.io/examples/generative/ddim/
