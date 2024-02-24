@@ -120,8 +120,11 @@ class Trainer(object):
         save_image(gen_grid, save_path=sample_path)
 
     def train(self, n_epochs, model, optim, scaler, n_warmup_steps):
-        for param in model.net.parameters():
-            param.register_hook(lambda grad: torch.clip(grad, -1, 1))
+        for param in model.parameters():
+            try:
+                param.register_hook(lambda grad: torch.clip(grad, -1, 1))
+            except Exception:
+                continue
 
         model = torch.compile(model)
 
