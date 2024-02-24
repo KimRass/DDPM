@@ -11,7 +11,6 @@ import math
 from time import time
 from tqdm import tqdm
 from timm.scheduler import CosineLRScheduler
-from diffusers import UNet2DModel
 
 
 from utils import (
@@ -121,7 +120,7 @@ class Trainer(object):
         save_image(gen_grid, save_path=sample_path)
 
     def train(self, n_epochs, model, optim, scaler, n_warmup_steps):
-        for param in model.parameters():
+        for param in model.net.parameters():
             param.register_hook(lambda grad: torch.clip(grad, -1, 1))
 
         model = torch.compile(model)
