@@ -193,7 +193,7 @@ class UNet(nn.Module):
                 # print("Down", out_channels)
                 self.down_block.append(Downsample(out_channels))
 
-        self.mid_block = nn.ModuleList(
+        self.mid_blocks = nn.ModuleList(
             [
                 ResBlock(
                     in_channels=out_channels,
@@ -267,7 +267,7 @@ class UNet(nn.Module):
             # print(x.shape)
             xs.append(x)
 
-        for layer in self.mid_block:
+        for layer in self.mid_blocks:
             x = layer(x, t)
         # print(x.shape)
 

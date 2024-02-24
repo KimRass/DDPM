@@ -143,13 +143,14 @@ class UNet(nn.Module):
         channel_mults=[1, 2, 2, 2],
         attns=[False, True, False, False],
         n_res_blocks=2,
-        dropout=0.1,
+        n_groups=32,
+        drop_prob=0.1,
     ):
         super().__init__()
 
         assert len(channel_mults) == len(attns)
 
-        time_channels = channels * 4
+        self.time_channels = channels * 4
         self.time_embed = TimeEmbedding(time_channels=self.time_channels)
 
         self.init_conv = nn.Conv2d(3, channels, 3, 1, 1)
@@ -163,9 +164,10 @@ class UNet(nn.Module):
                     ResBlock(
                         in_channels=cur_channels,
                         out_channels=out_channels,
-                        time_channels=time_channels,
-                        dropout=dropout,
-                        attns=attns[i],
+                        time_channels=self.time_channels,
+                        attn=attns[i],
+                        n_groups=n_groups,
+                        drop_prob=drop_prob,
                     )
                 )
                 cur_channels = out_channels
@@ -174,10 +176,26 @@ class UNet(nn.Module):
                 self.down_blocks.append(Downsample(cur_channels))
                 cxs.append(cur_channels)
 
-        self.mid_block = nn.ModuleList([
-            ResBlock(cur_channels, cur_channels, time_channels, dropout, attn=True),
-            ResBlock(cur_channels, cur_channels, time_channels, dropout, attn=False),
-        ])
+        self.mid_blocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=cur_channels,
+                    out_channels=cur_channels,
+                    time_channels=self.time_channels,
+                    attn=True,
+                    n_groups=n_groups,
+                    drop_prob=drop_prob,
+                ),
+                ResBlock(
+                    in_channels=cur_channels,
+                    out_channels=cur_channels,
+                    time_channels=self.time_channels,
+                    attn=False,
+                    n_groups=n_groups,
+                    drop_prob=drop_prob,
+                ),
+            ]
+        )
 
         self.up_blocks = nn.ModuleList()
         for i, mult in reversed(list(enumerate(channel_mults))):
@@ -187,9 +205,10 @@ class UNet(nn.Module):
                     ResBlock(
                         in_channels=cxs.pop() + cur_channels,
                         out_channels=out_channels,
-                        time_channels=time_channels,
-                        dropout=dropout,
-                        attns=attns[i],
+                        time_channels=self.time_channels,
+                        attn=attns[i],
+                        n_groups=n_groups,
+                        drop_prob=drop_prob,
                     )
                 )
                 cur_channels = out_channels
@@ -198,7 +217,7 @@ class UNet(nn.Module):
         assert len(cxs) == 0
 
         self.fin_block = nn.Sequential(
-            nn.GroupNorm(32, cur_channels),
+            nn.GroupNorm(n_groups, cur_channels),
             Swish(),
             nn.Conv2d(cur_channels, 3, 3, 1, 1)
         )
@@ -206,22 +225,25 @@ class UNet(nn.Module):
     def forward(self, noisy_image, diffusion_step):
         x = self.init_conv(noisy_image)
         t = self.time_embed(diffusion_step)
+
         xs = [x]
         for layer in self.down_blocks:
-            x = layer(x, t)
-            xs.append(x)
-
-        for layer in self.mid_block:
-            x = layer(x, t)
-
-        for layer in self.up_blocks:
-            if isinstance(layer, ResBlock):
-                x = torch.cat([x, xs.pop()], dim=1)
-
-            if isinstance(layer, Upsample):
+            if isinstance(layer, Downsample):
                 x = layer(x)
             else:
                 x = layer(x, t)
+            xs.append(x)
+
+        for layer in self.mid_blocks:
+            x = layer(x, t)
+
+        for layer in self.up_blocks:
+            if isinstance(layer, Upsample):
+                x = layer(x)
+            else:
+                x = torch.cat([x, xs.pop()], dim=1)
+                x = layer(x, t)
+
         x = self.fin_block(x)
         assert len(xs) == 0
         return x
