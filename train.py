@@ -24,7 +24,8 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-from unet import UNet
+# from unet import UNet
+from unet3 import UNet
 from ddpm import DDPM
 
 
