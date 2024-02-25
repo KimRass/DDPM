@@ -29,6 +29,13 @@ def get_args():
     parser.add_argument("--data_dir", type=str, required=False)
     parser.add_argument("--image_idx1", type=int, required=False)
     parser.add_argument("--image_idx2", type=int, required=False)
+    parser.add_argument("--n_points", type=int, default=10, required=False)
+
+    # For `"interpolation"`
+    parser.add_argument("--interpolate_at", type=int, default=500, required=False)
+
+    # For `"coarse_to_fine"`
+    parser.add_argument("--n_rows", type=int, default=9, required=False)
 
     args = parser.parse_args()
 
@@ -45,6 +52,7 @@ def main():
 
     DEVICE = get_device()
     args = get_args()
+    print(f"[ DEVICE: {DEVICE} ]")
     
     net = UNet()
     model = DDPM(model=net, img_size=args.IMG_SIZE, device=DEVICE)
@@ -66,16 +74,20 @@ def main():
                     data_dir=args.DATA_DIR,
                     image_idx1=args.IMAGE_IDX1,
                     image_idx2=args.IMAGE_IDX2,
+                    interpolate_at=args.INTERPOLATE_AT,
+                    n_points=args.N_POINTS,
                 )
-                gen_grid = image_to_grid(gen_image, n_cols=12)
+                gen_grid = image_to_grid(gen_image, n_cols=args.N_POINTS + 2)
                 save_image(gen_grid, save_path=args.SAVE_PATH)
             elif args.MODE  == "coarse_to_fine":
                 gen_image = model.coarse_to_fine_interpolate(
                     data_dir=args.DATA_DIR,
                     image_idx1=args.IMAGE_IDX1,
                     image_idx2=args.IMAGE_IDX2,
+                    n_rows=args.N_ROWS,
+                    n_points=args.N_POINTS,
                 )
-                gen_grid = image_to_grid(gen_image, n_cols=12)
+                gen_grid = image_to_grid(gen_image, n_cols=args.N_POINTS + 2)
                 save_image(gen_grid, save_path=args.SAVE_PATH)
 
 

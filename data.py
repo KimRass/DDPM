@@ -7,6 +7,7 @@ import torchvision.transforms as T
 from torchvision.datasets import CelebA
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+import cv2
 from PIL import Image
 import numpy as np
 from pathlib import Path
@@ -18,7 +19,7 @@ class CelebADS(Dataset):
 
         transforms = [
             A.HorizontalFlip(p=0.5),
-            A.SmallestMaxSize(max_size=img_size),
+            A.SmallestMaxSize(max_size=img_size, interpolation=cv2.INTER_AREA),
             A.CenterCrop(height=img_size, width=img_size),
             # "We assume that image data consists of integers in $\{0, 1, \ldots, 255\}$ scaled linearly
             # to $[-1, 1]$. This ensures that the neural network reverse process operates

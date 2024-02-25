@@ -3,15 +3,16 @@
 source ../../venv/cv/bin/activate
 source set_pythonpath.sh
 
-model_params="/Users/jongbeomkim/Documents/ddpm/kr-ml-test/ddpm_celeba_64×64.pth"
+# model_params="/Users/jongbeomkim/Documents/ddpm/kr-ml-test/ddpm_celeba_64×64.pth"
+model_params="/Users/jongbeomkim/Documents/ddpm/kr-ml-test/unet3/epoch=48-val_loss=0.0215.pth"
 save_dir="/Users/jongbeomkim/Desktop/workspace/DDPM/samples/"
 img_size=64
 
 python3 ../sample.py\
     --mode="normal"\
     --model_params="$model_params"\
-    --save_path="$save_dir/normal/0.jpg"\
-    --batch_size=1\
+    --save_path="$save_dir/normal/64×64_9.jpg"\
+    --batch_size=36\
     --img_size=$img_size\
 
 # python3 ../sample.py\

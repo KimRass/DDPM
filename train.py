@@ -1,6 +1,7 @@
 # References:
     # https://medium.com/mlearning-ai/enerating-images-with-ddpms-a-pytorch-implementation-cef5a2ba8cb1
     # https://colab.research.google.com/github/huggingface/notebooks/blob/main/diffusers/training_example.ipynb#scrollTo=e3eb5811-c10b-4dae-a58d-9583c42e7f57
+    # https://github.com/tcapelle/Diffusion-Models-pytorch/blob/main/modules.py
 
 import torch
 from torch.optim import AdamW
@@ -11,7 +12,8 @@ import math
 from time import time
 from tqdm import tqdm
 from timm.scheduler import CosineLRScheduler
-
+from copy import deepcopy
+import wandb
 
 from utils import (
     set_seed,
@@ -24,8 +26,7 @@ from utils import (
     save_image,
 )
 from data import get_train_and_val_dls
-# from unet import UNet
-from unet3 import UNet
+from unet import UNet
 from ddpm import DDPM
 
 
@@ -53,12 +54,46 @@ def get_args():
     return args
 
 
+class EMA:
+    def __init__(self, weight, model):
+        super().__init__()
+
+        self.weight = weight
+
+        self.ema_model = deepcopy(model)
+        self.ema_model.eval()
+        self.ema_model.requires_grad_(False)
+
+        self.cur_step = 0
+
+    def _reset_model_prams(self, cur_model):
+        self.ema_model.load_state_dict(cur_model.state_dict())
+
+    def _get_ema(self, x, y):
+        if x is None:
+            return y
+        return self.weight * x + (1 - self.weight) * y
+
+    def _update_model_params(self, cur_model):
+        for cur_param, ema_param in zip(cur_model.parameters(), self.ema_model.parameters()):
+            ema_param.data = self._get_ema(ema_param.data, cur_param.data)
+
+    def step(self, cur_model, start_step=2000):
+        if self.cur_step < start_step:
+            self._reset_model_prams(cur_model)
+        else:
+            self._update_model_params(cur_model)
+        self.cur_step += 1
+
+
 class Trainer(object):
     def __init__(self, train_dl, val_dl, save_dir, device):
         self.train_dl = train_dl
         self.val_dl = val_dl
         self.save_dir = Path(save_dir)
         self.device = device
+
+        self.run = wandb.init(project="DDPM")
 
         self.ckpt_path = self.save_dir/"ckpt.pth"
 
@@ -80,6 +115,7 @@ class Trainer(object):
             else:
                 loss.backward()
                 optim.step()
+            # self.ema.step(cur_model=model)
 
             self.scheduler.step((epoch - 1) * len(self.train_dl) + step_idx)
         return train_loss
@@ -100,6 +136,7 @@ class Trainer(object):
     def save_model_params(model, save_path):
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(modify_state_dict(model.state_dict()), str(save_path))
+        print(f"Saved model params as '{str(save_path)}'.")
 
     def save_ckpt(self, epoch, model, optim, min_val_loss, scaler):
         self.ckpt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,6 +156,7 @@ class Trainer(object):
         gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
         sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
         save_image(gen_grid, save_path=sample_path)
+        wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
     def train(self, n_epochs, model, optim, scaler, n_warmup_steps):
         for param in model.parameters():
@@ -128,6 +166,7 @@ class Trainer(object):
                 continue
 
         model = torch.compile(model)
+        # self.ema = EMA(weight=0.995, model=model)
 
         self.scheduler = CosineLRScheduler(
             optimizer=optim,
@@ -145,27 +184,35 @@ class Trainer(object):
             train_loss = self.train_for_one_epoch(
                 epoch=epoch, model=model, optim=optim, scaler=scaler,
             )
+            # val_loss = self.validate(self.ema.ema_model)
             val_loss = self.validate(model)
             if val_loss < min_val_loss:
                 model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
+                # self.save_model_params(model=self.ema.ema_model, save_path=model_params_path)
                 self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
 
             self.save_ckpt(
                 epoch=epoch,
+                # model=self.ema.ema_model,
                 model=model,
                 optim=optim,
                 min_val_loss=min_val_loss,
                 scaler=scaler,
             )
 
-            self.test_sampling(epoch=epoch, model=model, batch_size=4)
+            # self.test_sampling(epoch=epoch, model=self.ema.ema_model, batch_size=16)
+            self.test_sampling(epoch=epoch, model=model, batch_size=16)
 
             log = f"[ {get_elapsed_time(start_time)} ]"
             log += f"[ {epoch}/{n_epochs} ]"
             log += f"[ Train loss: {train_loss:.4f} ]"
             log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
             print(log)
+            wandb.log(
+                {"Train loss": train_loss, "Val loss": val_loss, "Min val loss": min_val_loss},
+                step=epoch,
+            )
 
 
 def main():
