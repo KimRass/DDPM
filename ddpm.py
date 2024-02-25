@@ -1,6 +1,4 @@
 # References:
-    # https://github.com/KimRass/Transformer/blob/main/model.py
-    # https://nn.labml.ai/diffusion/ddpm/umodel.html
     # https://nn.labml.ai/diffusion/ddpm/index.html
     # https://github.com/davidADSP/Generative_Deep_Learning_2nd_Edition/blob/main/notebooks/08_diffusion/01_ddm/ddm.ipynb
     # https://huggingface.co/blog/annotated-diffusion
@@ -21,7 +19,7 @@ class DDPM(nn.Module):
     def get_linear_beta_schdule(self):
         # "We set the forward process variances to constants increasing linearly."
         # return torch.linspace(init_beta, fin_beta, n_diffusion_steps) # "$\beta_{t}$"
-        return torch.linspace(
+        self.beta = torch.linspace(
             self.init_beta,
             self.fin_beta,
             self.n_diffusion_steps,
@@ -49,7 +47,7 @@ class DDPM(nn.Module):
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        self.beta = self.get_linear_beta_schdule()
+        self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
@@ -123,15 +121,15 @@ class DDPM(nn.Module):
         # $x_{t - 1} = \frac{1}{\sqrt{\alpha_{t}}}
         # \Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}z_{\theta}(x_{t}, t)\Big)
         # + \sigma_{t}z"$
-        mean = (1 / (alpha_t ** 0.5)) * (
+        model_mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - ((beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise)
         )
         if diffusion_step_idx > 0:
-            var = beta_t
+            model_var = beta_t
             random_noise = self.sample_noise(batch_size=noisy_image.size(0))
-            denoised_image = mean + (var ** 0.5) * random_noise
+            denoised_image = model_mean + (model_var ** 0.5) * random_noise
         else:
-            denoised_image = mean
+            denoised_image = model_mean
         return denoised_image
 
     @staticmethod
