@@ -245,6 +245,7 @@ def main():
     net = UNet()
     model = DDPM(model=net, img_size=args.IMG_SIZE, device=DEVICE)
     print_n_params(model)
+    # "We set the batch size to 128 for CIFAR10 and 64 for larger images."
     optim = AdamW(model.parameters(), lr=args.LR)
     scaler = get_grad_scaler(device=DEVICE)
 

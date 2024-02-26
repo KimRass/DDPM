@@ -12,8 +12,8 @@ python3 ../sample.py\
     --mode="normal"\
     --model_params="....pth
     --save_path="samples/normal/0.jpg"\
-    --batch_size=1\
-    --img_size=64
+    --img_size=64\
+    --batch_size=100\
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/8d01e6d4-987d-4b0e-a45b-5ad1b155d448" width="450">
 - <img src="https://github.com/KimRass/DDPM/assets/105417680/a7632da1-33cf-4413-ac77-e54bd643ddaa" width="700">
@@ -24,8 +24,8 @@ python3 ../sample.py\
     --mode="denoising_process"\
     --model_params="....pth
     --save_path="samples/denoising_process/0.gif"\
-    --img_size=64
-    --batch_size=1\
+    --img_size=64\
+    --batch_size=100\
 ```
 - <img src="https://github.com/KimRass/DDPM/assets/67457712/c7ec68bb-deba-45b5-b420-a068f65df9b6" width="210">
 ## 3) `"interpolation"` mode
@@ -53,7 +53,7 @@ python3 ../sample.py\
 python3 ../sample.py\
     --mode="coarse_to_fine"\
     --model_params="....pth
-    --save_path="samples/coarse_to_fine_interpolation/0.jpg"\
+    --save_path="samples/coarse_to_fine/0.jpg"\
     --img_size=64
     --data_dir="/Users/jongbeomkim/Documents/datasets/"\
     --image_idx1=50\
@@ -76,11 +76,15 @@ python3 eval.py
 ```
 
 # 4. Theorectical Background
-## 1) Forward (diffusion) process
+## 1) Forward (Diffusion) Process
+$$q(x_{t} \vert x_{t - 1}) = \mathcal{N}(x_{t}; \sqrt{1 - \beta_{t}}x_{t - 1}, \beta_{t}I)$$
+$$q(x_{t} \vert x_{0}) = \mathcal{N}(x_{t}; \sqrt{\bar{\alpha}_{t}}x_{0}, (1 - \bar{\alpha}_{t})I)$$
 - Timestep이 매우 커질 때 이미지가 Normal gaussian distribution을 따르는 이유는?
     $$\prod_{s=1}^{t}{\alpha_{s}}$$
     - 1보다 작은 많은 수들을 서로 곱할 경우 0에 수렴합니다.
-## 2) FID (Frechet Inception Distance)
+## 2) Backward (Denoising) Process
+$$\mu_{\theta}(x_{t}, t) = \frac{1}{\sqrt{\alpha_{t}}}\Big(x_{t} - \frac{\beta_{t}}{\sqrt{1 - \bar{\alpha_{t}}}}\epsilon_{\theta}(x_{t}, t)\Big)$$
+## 3) FID (Frechet Inception Distance)
 $$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma_{Y} - 2\sqrt{\Sigma_{X}\Sigma_{Y}}\big)$$
 <!-- - Forward (diffusion) process
     - We define the forward diffusion process which adds Gaussian noise at each time step $t$, according to a known variance schedule $0 < \beta_{1} < \beta_{2} < \ldots < \beta_{T} < 1$ as
@@ -99,10 +103,7 @@ $$\text{FID} = \lVert\mu_{X} - \mu_{Y}\rVert^{2}_{2} +Tr\big(\Sigma_{x} + \Sigma
     - We can parametrize the process as
     $$p_{\theta}(x_{t - 1} | x_{t}) = \mathcal{N}(x_{t - 1}; \mu_{\theta}(x_{t}, t), \Sigma(x_{t}, t)$$
     - where the mean and variance are also conditioned on the noise level $t$.
-    - Hence, our neural network needs to learn/represent the mean and variance. However, the DDPM authors decided to keep the variance fixed, and let the neural network only learn (represent) the mean $\mu_{\theta}​$ of this conditional probability distribution.
-## 2) DDIM
-- Backward (denoising) process
-    $$x_{t - 1} = \sqrt{\alpha_{t - 1}}\Bigg(\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}}{\sqrt{\alpha_{t}}}\Bigg) + \sqrt{1 - \alpha_{t - 1}}\epsilon_{\theta}$$ -->
+    - Hence, our neural network needs to learn/represent the mean and variance. However, the DDPM authors decided to keep the variance fixed, and let the neural network only learn (represent) the mean $\mu_{\theta}​$ of this conditional probability distribution. -->
 <!-- ## 4) Kullback–Leibler Divergence (KL Divergence)
 - Also called 'relative entropy' and 'I-divergence'.
 $$D_{KL}(P || Q)$$
@@ -111,7 +112,7 @@ $$D_{KL}(P || Q)$$
 $$D_{KL}(P || Q) = - \sum_{x \in \mathcal{X}}P(x)\log\bigg(\frac{Q(x)}{P(x)}\bigg)$$
 - For distributions $P$ and $Q$ of a continuous random variable, relative entropy is defined to be the integral:
 $$D_{KL}(P || Q) = - \int_{-\infty}^{\infty} p(x)\log\bigg(\frac{q(x)}{p(x)}\bigg)dx$$
-- where $p$ and $q$ denote the probability densities of $P$ and $Q$. -->
+- where $p$ and $q$ denote the probability densities of $P$ and $Q$.
 
 # 5. References
 - https://huggingface.co/blog/annotated-diffusion

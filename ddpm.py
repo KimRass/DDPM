@@ -24,7 +24,7 @@ class DDPM(nn.Module):
             self.fin_beta,
             self.n_diffusion_steps,
             device=self.device,
-        ) # "$\beta_{t}$"
+        ) # "The forward process variances $\beta_{t}$"
 
     # "We set T = 1000 without a sweep."
     # "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
@@ -47,12 +47,12 @@ class DDPM(nn.Module):
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
+        self.model = model.to(device)
+
         self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta # "$\alpha_{t} = 1 - \beta_{t}$"
         # "$\bar{\alpha_{t}} = \prod^{t}_{s=1}{\alpha_{s}}$"
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
-
-        self.model = model.to(device)
 
     @staticmethod
     def index(x, diffusion_step):
@@ -81,32 +81,33 @@ class DDPM(nn.Module):
             device=self.device,
         )
 
-    def perform_diffusion_process(self, ori_image, diffusion_step, random_noise=None):
+    def perform_diffusion_process(self, ori_image, diffusion_step, rand_noise=None):
         # "$\bar{\alpha_{t}}$"
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         mean = (alpha_bar_t ** 0.5) * ori_image # $\sqrt{\bar{\alpha_{t}}}x_{0}$
         var = 1 - alpha_bar_t # $(1 - \bar{\alpha_{t}})\mathbf{I}$
-        if random_noise is None:
-            random_noise = self.sample_noise(batch_size=ori_image.size(0))
-        noisy_image = mean + (var ** 0.5) * random_noise
+        if rand_noise is None:
+            rand_noise = self.sample_noise(batch_size=ori_image.size(0))
+        noisy_image = mean + (var ** 0.5) * rand_noise
         return noisy_image
 
     def forward(self, noisy_image, diffusion_step):
+        # "where $\epsilon_{\theta}$ is a function approximator intended to predict $\epsilon$ from $x_{t}$."
         return self.model(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
         diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
-        random_noise = self.sample_noise(batch_size=ori_image.size(0))
+        rand_noise = self.sample_noise(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         noisy_image = self.perform_diffusion_process(
-            ori_image=ori_image, diffusion_step=diffusion_step, random_noise=random_noise,
+            ori_image=ori_image, diffusion_step=diffusion_step, rand_noise=rand_noise,
         )
         with torch.autocast(
             device_type=self.device.type, dtype=torch.float16,
         ) if self.device.type == "cuda" else contextlib.nullcontext():
             pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
-            return F.mse_loss(pred_noise, random_noise, reduction="mean")
+            return F.mse_loss(pred_noise, rand_noise, reduction="mean")
 
     @torch.inference_mode()
     def take_denoising_step(self, noisy_image, diffusion_step_idx):
@@ -124,13 +125,16 @@ class DDPM(nn.Module):
         model_mean = (1 / (alpha_t ** 0.5)) * (
             noisy_image - ((beta_t / ((1 - alpha_bar_t) ** 0.5)) * pred_noise)
         )
+        # "At the end of sampling, we display $\mu_{\theta}(x_{1}, 1)$ noiselessly."
+        model_var = beta_t # "$\sigma_{t}$"
         if diffusion_step_idx > 0:
-            model_var = beta_t
-            random_noise = self.sample_noise(batch_size=noisy_image.size(0))
-            denoised_image = model_mean + (model_var ** 0.5) * random_noise
+            rand_noise = self.sample_noise(batch_size=noisy_image.size(0)) # "$z$"
         else:
-            denoised_image = model_mean
-        return denoised_image
+            rand_noise = torch.zeros(
+                size=(noisy_image.size(0), self.image_channels, self.img_size, self.img_size),
+                device=self.device,
+            )
+        return model_mean + (model_var ** 0.5) * rand_noise
 
     @staticmethod
     def _get_frame(x):
@@ -156,17 +160,17 @@ class DDPM(nn.Module):
         return frames if n_frames is not None else x
 
     def sample(self, batch_size):
-        random_noise = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
+        rand_noise = self.sample_noise(batch_size=batch_size) # "$x_{T}$"
         return self.perform_denoising_process(
-            noisy_image=random_noise,
+            noisy_image=rand_noise,
             start_diffusion_step_idx=self.n_diffusion_steps - 1,
             n_frames=None,
         )
 
     def vis_denoising_process(self, batch_size, save_path, n_frames=100):
-        random_noise = self.sample_noise(batch_size=batch_size)
+        rand_noise = self.sample_noise(batch_size=batch_size)
         frames = self.perform_denoising_process(
-            noisy_image=random_noise,
+            noisy_image=rand_noise,
             start_diffusion_step_idx=self.n_diffusion_steps - 1,
             n_frames=n_frames,
         )
