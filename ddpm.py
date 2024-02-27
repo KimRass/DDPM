@@ -56,11 +56,7 @@ class DDPM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return torch.index_select(
-            x,
-            dim=0,
-            index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
-        )[:, None, None, None]
+        return x[diffusion_step][:, None, None, None]
 
     def sample_noise(self, batch_size):
         return torch.randn(
@@ -127,6 +123,7 @@ class DDPM(nn.Module):
         )
         # "At the end of sampling, we display $\mu_{\theta}(x_{1}, 1)$ noiselessly."
         model_var = beta_t # "$\sigma_{t}$"
+
         if diffusion_step_idx > 0:
             rand_noise = self.sample_noise(batch_size=noisy_image.size(0)) # "$z$"
         else:

@@ -10,9 +10,9 @@ img_size=64
 python3 ../sample.py\
     --mode="normal"\
     --model_params="$model_params"\
-    --save_path="$save_dir/normal/64×64_9.jpg"\
+    --save_path="$save_dir/normal/64×64_10.jpg"\
     --img_size=$img_size\
-    --batch_size=36\
+    --batch_size=1\
 
 # python3 ../sample.py\
 #     --mode="denoising_process"\

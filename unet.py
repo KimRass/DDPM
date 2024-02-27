@@ -32,13 +32,6 @@ class TimeEmbedding(nn.Module):
             Swish(),
             nn.Linear(dim, dim),
         )
-        self.initialize()
-
-    def initialize(self):
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.zeros_(module.bias)
 
     def forward(self, t):
         emb = self.timembedding(t)
@@ -49,13 +42,8 @@ class DownSample(nn.Module):
     def __init__(self, in_ch):
         super().__init__()
         self.main = nn.Conv2d(in_ch, in_ch, 3, stride=2, padding=1)
-        self.initialize()
 
-    def initialize(self):
-        nn.init.xavier_uniform_(self.main.weight)
-        nn.init.zeros_(self.main.bias)
-
-    def forward(self, x, temb):
+    def forward(self, x):
         x = self.main(x)
         return x
 
@@ -64,11 +52,6 @@ class UpSample(nn.Module):
     def __init__(self, in_ch):
         super().__init__()
         self.main = nn.Conv2d(in_ch, in_ch, 3, stride=1, padding=1)
-        self.initialize()
-
-    def initialize(self):
-        nn.init.xavier_uniform_(self.main.weight)
-        nn.init.zeros_(self.main.bias)
 
     def forward(self, x):
         x = F.interpolate(x, scale_factor=2, mode="nearest")
@@ -84,13 +67,6 @@ class AttnBlock(nn.Module):
         self.proj_k = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
         self.proj_v = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
         self.proj = nn.Conv2d(in_ch, in_ch, 1, stride=1, padding=0)
-    #     self.initialize()
-
-    # def initialize(self):
-    #     for module in [self.proj_q, self.proj_k, self.proj_v, self.proj]:
-    #         nn.init.xavier_uniform_(module.weight)
-    #         nn.init.zeros_(module.bias)
-    #     nn.init.xavier_uniform_(self.proj.weight, gain=1e-5)
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -140,14 +116,6 @@ class ResBlock(nn.Module):
             self.attn = AttnBlock(out_ch)
         else:
             self.attn = nn.Identity()
-        self.initialize()
-
-    def initialize(self):
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.zeros_(module.bias)
-        nn.init.xavier_uniform_(self.block2[-1].weight, gain=1e-5)
 
     def forward(self, x, temb):
         h = self.block1(x)
@@ -212,32 +180,26 @@ class UNet(nn.Module):
             Swish(),
             nn.Conv2d(cur_ch, 3, kernel_size=3, stride=1, padding=1)
         )
-        self.initialize()
-
-    def initialize(self):
-        nn.init.xavier_uniform_(self.head.weight)
-        nn.init.zeros_(self.head.bias)
-        nn.init.xavier_uniform_(self.tail[-1].weight, gain=1e-5)
-        nn.init.zeros_(self.tail[-1].bias)
 
     def forward(self, noisy_image, diffusion_step):
         temb = self.time_embedding(diffusion_step)
         x = self.head(noisy_image)
         xs = [x]
         for layer in self.downblocks:
-            x = layer(x, temb)
+            if isinstance(layer, DownSample):
+                x = layer(x)
+            else:
+                x = layer(x, temb)
             xs.append(x)
 
         for layer in self.middleblocks:
             x = layer(x, temb)
 
         for layer in self.upblocks:
-            if isinstance(layer, ResBlock):
-                x = torch.cat([x, xs.pop()], dim=1)
-
             if isinstance(layer, UpSample):
                 x = layer(x)
             else:
+                x = torch.cat([x, xs.pop()], dim=1)
                 x = layer(x, temb)
         x = self.tail(x)
         assert len(xs) == 0
