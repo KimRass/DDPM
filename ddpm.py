@@ -93,16 +93,18 @@ class DDPM(nn.Module):
 
     def get_loss(self, ori_image):
         # "Algorithm 1-3: $t \sim Uniform(\{1, \ldots, T\})$"
-        diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
+        rand_diffusion_step = self.sample_diffusion_step(batch_size=ori_image.size(0))
         rand_noise = self.sample_noise(batch_size=ori_image.size(0))
         # "Algorithm 1-4: $\epsilon \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$"
         noisy_image = self.perform_diffusion_process(
-            ori_image=ori_image, diffusion_step=diffusion_step, rand_noise=rand_noise,
+            ori_image=ori_image,
+            diffusion_step=rand_diffusion_step,
+            rand_noise=rand_noise,
         )
         with torch.autocast(
             device_type=self.device.type, dtype=torch.float16,
         ) if self.device.type == "cuda" else contextlib.nullcontext():
-            pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
+            pred_noise = self(noisy_image=noisy_image, diffusion_step=rand_diffusion_step)
             return F.mse_loss(pred_noise, rand_noise, reduction="mean")
 
     @torch.inference_mode()
