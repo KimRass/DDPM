@@ -39,17 +39,6 @@ def get_device():
     return device
 
 
-def get_device():
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        if torch.backends.mps.is_available():
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
-    return device
-
-
 def get_grad_scaler(device):
     return GradScaler() if device.type == "cuda" else None
 
