@@ -2,7 +2,7 @@
 # References:
     # https://github.com/KimRass/DCGAN/blob/main/celeba.py
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, DistributedSampler
 import torchvision.transforms as T
 from torchvision.datasets import CelebA
 import albumentations as A
@@ -55,6 +55,51 @@ def get_train_and_val_dls(data_dir, img_size, batch_size, n_cpus):
         val_ds,
         batch_size=batch_size,
         shuffle=False,
+        pin_memory=True,
+        drop_last=True,
+        persistent_workers=True,
+        num_workers=n_cpus,
+    )
+    return train_dl, val_dl
+
+
+def get_test_dl(data_dir, img_size, batch_size, n_cpus):
+    test_ds = CelebADS(data_dir=data_dir, split="test", img_size=img_size, hflip=False)
+    return DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        pin_memory=False,
+        drop_last=True,
+        persistent_workers=False,
+        num_workers=n_cpus,
+    )
+
+
+def get_train_and_val_dls_ddp(
+    data_dir, img_size, batch_size, n_cpus, rank, world_size,
+):
+    train_ds = CelebADS(data_dir=data_dir, split="train", img_size=img_size, hflip=True)
+    val_ds = CelebADS(data_dir=data_dir, split="valid", img_size=img_size, hflip=False)
+    train_sampler = DistributedSampler(
+        train_ds, num_replicas=world_size, rank=rank, shuffle=True,
+    )
+    val_sampler = DistributedSampler(
+        val_ds, num_replicas=world_size, rank=rank, shuffle=True,
+    )
+    train_dl = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        sampler=train_sampler,
+        pin_memory=True,
+        drop_last=True,
+        persistent_workers=True,
+        num_workers=n_cpus,
+    )
+    val_dl = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        sampler=val_sampler,
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,

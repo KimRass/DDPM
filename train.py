@@ -154,7 +154,7 @@ class Trainer(object):
     def test_sampling(self, epoch, model, batch_size):
         gen_image = model.sample(batch_size=batch_size)
         gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
-        sample_path = self.save_dir/f"sample-epoch={epoch}.jpg"
+        sample_path = str(self.save_dir/f"sample-epoch={epoch}.jpg")
         save_image(gen_grid, save_path=sample_path)
         wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
