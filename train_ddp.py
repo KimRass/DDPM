@@ -37,7 +37,7 @@ def get_args():
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
-    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--batch_size_per_gpu", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--num_workers", type=int, required=True)
     parser.add_argument("--n_warmup_steps", type=int, required=True)
@@ -69,6 +69,8 @@ class Trainer(object):
         self.ckpt_path = self.save_dir/self.run.name/"ckpt.pth"
 
     def train_for_one_epoch(self, epoch, model, optim, scaler):
+        self.train_dl.sampler.set_epoch(epoch)
+
         train_loss = 0
         if self.rank == 0:
             pbar = tqdm(self.train_dl, leave=False)
@@ -79,6 +81,7 @@ class Trainer(object):
                 pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
+            print(ori_image.shape)
             loss = model.module.get_loss(ori_image)
             train_loss += (loss.item() / len(self.train_dl))
 
@@ -143,12 +146,6 @@ class Trainer(object):
     def train(self, n_epochs, model, optim, scaler, n_warmup_steps):
         if self.rank == 0:
             print_n_params(model)
-
-        # for param in model.parameters():
-        #     try:
-        #         param.register_hook(lambda grad: torch.clip(grad, -1, 1))
-        #     except Exception:
-        #         continue
 
         model = torch.compile(model)
 
@@ -230,7 +227,7 @@ class DistDataParallel(object):
         train_dl, val_dl = get_train_and_val_dls_ddp(
             data_dir=self.args.DATA_DIR,
             img_size=self.args.IMG_SIZE,
-            batch_size=self.args.BATCH_SIZE,
+            batch_size=self.args.BATCH_SIZE_PER_GPU,
             num_workers=self.args.NUM_WORKERS,
             rank=rank,
             world_size=workld_size,
@@ -275,7 +272,6 @@ def main():
     args = get_args()
     ddp = DistDataParallel(args)
     run = wandb.init(project="DDPM")
-    # run = None
     ddp.run(run)
 
 
