@@ -9,6 +9,6 @@ python3 ../train_ddp.py\
     --n_epochs=50\
     --batch_size=16\
     --lr=0.0003\
-    --n_cpus=4\
-    --img_size=128\
+    --num_workers=8\
+    --img_size=64\
     --n_warmup_steps=1000\
