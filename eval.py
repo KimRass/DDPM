@@ -36,7 +36,7 @@ def get_args():
 def get_matrix_sqrt(x):
     conv_mean = scipy.linalg.sqrtm(x)
     if np.iscomplexobj(conv_mean):
-       conv_mean = conv_mean.real
+        conv_mean = conv_mean.real
     return conv_mean
 
 

@@ -9,3 +9,4 @@ pyvenv.cfg
 share/
 wandb/
 temp.py
+.localized
