@@ -39,7 +39,7 @@ class CelebADS(Dataset):
         return self.transform(image=np.array(image))["image"]
 
 
-def get_train_and_val_dls(data_dir, img_size, batch_size, n_cpus):
+def get_train_and_val_dls(data_dir, img_size, batch_size, num_workers):
     train_ds = CelebADS(data_dir=data_dir, split="train", img_size=img_size, hflip=True)
     val_ds = CelebADS(data_dir=data_dir, split="valid", img_size=img_size, hflip=False)
     train_dl = DataLoader(
@@ -49,7 +49,7 @@ def get_train_and_val_dls(data_dir, img_size, batch_size, n_cpus):
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,
-        num_workers=n_cpus,
+        num_workers=num_workers,
     )
     val_dl = DataLoader(
         val_ds,
@@ -58,12 +58,12 @@ def get_train_and_val_dls(data_dir, img_size, batch_size, n_cpus):
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,
-        num_workers=n_cpus,
+        num_workers=num_workers,
     )
     return train_dl, val_dl
 
 
-def get_test_dl(data_dir, img_size, batch_size, n_cpus):
+def get_test_dl(data_dir, img_size, batch_size, num_workers):
     test_ds = CelebADS(data_dir=data_dir, split="test", img_size=img_size, hflip=False)
     return DataLoader(
         test_ds,
@@ -72,12 +72,12 @@ def get_test_dl(data_dir, img_size, batch_size, n_cpus):
         pin_memory=False,
         drop_last=True,
         persistent_workers=False,
-        num_workers=n_cpus,
+        num_workers=num_workers,
     )
 
 
 def get_train_and_val_dls_ddp(
-    data_dir, img_size, batch_size, n_cpus, rank, world_size,
+    data_dir, img_size, batch_size, num_workers, rank, world_size,
 ):
     train_ds = CelebADS(data_dir=data_dir, split="train", img_size=img_size, hflip=True)
     val_ds = CelebADS(data_dir=data_dir, split="valid", img_size=img_size, hflip=False)
@@ -94,7 +94,7 @@ def get_train_and_val_dls_ddp(
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,
-        num_workers=n_cpus,
+        num_workers=num_workers,
     )
     val_dl = DataLoader(
         val_ds,
@@ -103,12 +103,12 @@ def get_train_and_val_dls_ddp(
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,
-        num_workers=n_cpus,
+        num_workers=num_workers,
     )
     return train_dl, val_dl
 
 
-def get_test_dl(data_dir, img_size, batch_size, n_cpus):
+def get_test_dl(data_dir, img_size, batch_size, num_workers):
     test_ds = CelebADS(data_dir=data_dir, split="test", img_size=img_size, hflip=False)
     return DataLoader(
         test_ds,
@@ -117,7 +117,7 @@ def get_test_dl(data_dir, img_size, batch_size, n_cpus):
         pin_memory=False,
         drop_last=True,
         persistent_workers=False,
-        num_workers=n_cpus,
+        num_workers=num_workers,
     )
 
 

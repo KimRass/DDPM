@@ -37,9 +37,9 @@ def get_args():
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
     parser.add_argument("--n_epochs", type=int, required=True)
-    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--batch_size_per_gpu", type=int, required=True)
     parser.add_argument("--lr", type=float, required=True)
-    parser.add_argument("--n_cpus", type=int, required=True)
+    parser.add_argument("--num_workers", type=int, required=True)
     parser.add_argument("--n_warmup_steps", type=int, required=True)
     parser.add_argument("--img_size", type=int, required=True)
     parser.add_argument("--rank", type=int, default=0, required=False)
@@ -66,9 +66,11 @@ class Trainer(object):
         self.device = device
         self.rank = rank
 
-        self.ckpt_path = self.save_dir/"ckpt.pth"
+        self.ckpt_path = self.save_dir/self.run.name/"ckpt.pth"
 
     def train_for_one_epoch(self, epoch, model, optim, scaler):
+        self.train_dl.sampler.set_epoch(epoch)
+
         train_loss = 0
         if self.rank == 0:
             pbar = tqdm(self.train_dl, leave=False)
@@ -79,6 +81,7 @@ class Trainer(object):
                 pbar.set_description("Training...")
 
             ori_image = ori_image.to(self.device)
+            print(ori_image.shape)
             loss = model.module.get_loss(ori_image)
             train_loss += (loss.item() / len(self.train_dl))
 
@@ -134,19 +137,15 @@ class Trainer(object):
         if self.rank == 0:
             gen_image = model.module.sample(batch_size=batch_size)
             gen_grid = image_to_grid(gen_image, n_cols=int(batch_size ** 0.5))
-            sample_path = str(self.save_dir/f"sample-epoch={epoch}.jpg")
+            sample_path = str(
+                self.save_dir/self.run.name/f"sample-epoch={epoch}.jpg"
+            )
             save_image(gen_grid, save_path=sample_path)
-            # wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
+            wandb.log({"Samples": wandb.Image(sample_path)}, step=epoch)
 
     def train(self, n_epochs, model, optim, scaler, n_warmup_steps):
         if self.rank == 0:
             print_n_params(model)
-
-        # for param in model.parameters():
-        #     try:
-        #         param.register_hook(lambda grad: torch.clip(grad, -1, 1))
-        #     except Exception:
-        #         continue
 
         model = torch.compile(model)
 
@@ -168,7 +167,9 @@ class Trainer(object):
             )
             val_loss = self.validate(model)
             if val_loss < min_val_loss and self.rank == 0:
-                model_params_path = str(self.save_dir/f"epoch={epoch}-val_loss={val_loss:.4f}.pth")
+                model_params_path = str(
+                    self.save_dir/self.run.name/f"epoch={epoch}-val_loss={val_loss:.4f}.pth"
+                )
                 self.save_model_params(model=model, save_path=model_params_path)
                 min_val_loss = val_loss
 
@@ -188,10 +189,12 @@ class Trainer(object):
                 log += f"[ Train loss: {train_loss:.4f} ]"
                 log += f"[ Val loss: {val_loss:.4f} | Best: {min_val_loss:.4f} ]"
                 print(log)
-                # wandb.log(
-                #     {"Train loss": train_loss, "Val loss": val_loss, "Min val loss": min_val_loss},
-                #     step=epoch,
-                # )
+                wandb.log(
+                    {"Train loss": train_loss, "Val loss": val_loss, "Min val loss": min_val_loss},
+                    step=epoch,
+                )
+
+        self.run.finish()
 
 
 class DistDataParallel(object):
@@ -224,8 +227,8 @@ class DistDataParallel(object):
         train_dl, val_dl = get_train_and_val_dls_ddp(
             data_dir=self.args.DATA_DIR,
             img_size=self.args.IMG_SIZE,
-            batch_size=self.args.BATCH_SIZE,
-            n_cpus=self.args.N_CPUS,
+            batch_size=self.args.BATCH_SIZE_PER_GPU,
+            num_workers=self.args.NUM_WORKERS,
             rank=rank,
             world_size=workld_size,
         )
@@ -268,8 +271,7 @@ class DistDataParallel(object):
 def main():
     args = get_args()
     ddp = DistDataParallel(args)
-    # run = wandb.init(project="DDPM")
-    run = None
+    run = wandb.init(project="DDPM")
     ddp.run(run)
 
 
