@@ -120,7 +120,7 @@ class Evaluator(object):
         self.process_real_dl()
 
     @torch.no_grad()
-    def process_real_dl(self):
+    def process_gen_dl(self, gen_dl):
         embeds = list()
         gen_di = iter(gen_dl)
         for _ in tqdm(range(math.ceil(self.n_eval_imgs / self.batch_size))):
@@ -133,7 +133,7 @@ class Evaluator(object):
         self.real_embed = np.concatenate(embeds)[: self.n_eval_imgs]
 
     @torch.no_grad()
-    def process_gen_dl(self):
+    def process_real_dl(self, real_dl):
         embeds = list()
         probs = list()
         real_di = iter(real_dl)
@@ -155,7 +155,7 @@ class Evaluator(object):
         return gen_embed, gen_prob if self.mode in ["is", "both"] else gen_embed
 
     def evaluate(self):
-        gen_embed, gen_prob = self.process_gen_dl()
+        gen_embed, gen_prob = self.process_real_dl()
         fid = get_fid(self.real_embed, gen_embed)
         print(f"[ FID: {fid:.2f} ]")
         if self.mode in ["is", "both"]:
